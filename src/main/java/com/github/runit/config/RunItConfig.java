@@ -15,6 +15,7 @@ public class RunItConfig {
         sb.append("version = ").append(version).append("\n\n");
         for (ActionConfig action : actions) {
             sb.append("[[actions]]\n");
+            sb.append("id = \"").append(escape(action.id)).append("\"\n");
             sb.append("name = \"").append(escape(action.name)).append("\"\n");
             sb.append("icon = \"").append(escape(action.icon)).append("\"\n");
             sb.append("command = \"").append(escape(action.command)).append("\"\n\n");

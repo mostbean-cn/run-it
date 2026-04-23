@@ -1,6 +1,9 @@
 package com.github.runit.ui.settings;
 
 import com.github.runit.config.ActionConfig;
+import com.github.runit.config.ActionScope;
+import com.github.runit.config.RunItConfigPaths;
+import com.github.runit.i18n.RunItBundle;
 import com.github.runit.ui.RunItIcons;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
@@ -18,21 +21,23 @@ import java.awt.*;
 import java.util.Map;
 
 public class EditActionDialog extends DialogWrapper {
+    private final Project project;
     private final JBTextField nameField;
+    private final JComboBox<ActionScope> scopeCombo;
     private final JComboBox<IconItem> iconCombo;
     private final JBTextArea commandArea;
-    private final ActionConfig original;
-    private final int index;
+    private final JBLabel configHint;
 
     private static final Map<String, javax.swing.Icon> ICON_MAP = RunItIcons.availableIcons();
 
-    public EditActionDialog(Project project, ActionConfig config, int index) {
+    public EditActionDialog(Project project, ActionConfig config, int index, ActionScope initialScope) {
         super(project);
-        this.original = config;
-        this.index = index;
-        setTitle(index < 0 ? "添加操作" : "编辑操作");
+        this.project = project;
+        setTitle(index < 0 ? RunItBundle.message("dialog.edit.add.title") : RunItBundle.message("dialog.edit.edit.title"));
 
         nameField = new JBTextField(config != null ? config.name : "");
+        scopeCombo = new JComboBox<>(ActionScope.values());
+        scopeCombo.setSelectedItem(initialScope != null ? initialScope : ActionScope.PROJECT);
         iconCombo = new JComboBox<>();
         for (Map.Entry<String, javax.swing.Icon> entry : ICON_MAP.entrySet()) {
             iconCombo.addItem(new IconItem(entry.getKey(), entry.getValue()));
@@ -49,32 +54,44 @@ public class EditActionDialog extends DialogWrapper {
         commandArea = new JBTextArea(config != null ? config.command : "", 6, 40);
         commandArea.setLineWrap(true);
         commandArea.setWrapStyleWord(true);
+        configHint = createConfigHint();
+        scopeCombo.addActionListener(e -> updateConfigHint());
 
         init();
+        updateConfigHint();
     }
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
         JPanel panel = FormBuilder.createFormBuilder()
-                .addLabeledComponent("名称:", nameField)
-                .addLabeledComponent("图标:", iconCombo)
-                .addLabeledComponent("要运行的命令:", JBUI.Panels.simplePanel(new JScrollPane(commandArea)))
-                .addComponent(createConfigHint())
+                .addLabeledComponent(RunItBundle.message("dialog.edit.label.name"), nameField)
+                .addLabeledComponent(RunItBundle.message("dialog.edit.label.scope"), scopeCombo)
+                .addLabeledComponent(RunItBundle.message("dialog.edit.label.icon"), iconCombo)
+                .addLabeledComponent(RunItBundle.message("dialog.edit.label.command"), JBUI.Panels.simplePanel(new JScrollPane(commandArea)))
+                .addComponent(configHint)
                 .getPanel();
         panel.setMinimumSize(new Dimension(450, 250));
         return panel;
     }
 
     private JBLabel createConfigHint() {
-        JBLabel hint = new JBLabel("配置保存到.runit/runit.toml");
+        JBLabel hint = new JBLabel();
         hint.setForeground(JBColor.GRAY);
+        hint.setToolTipText("");
         return hint;
+    }
+
+    private void updateConfigHint() {
+        ActionScope scope = getSelectedScope();
+        String path = RunItConfigPaths.getDisplayPath(project, scope);
+        configHint.setText(RunItBundle.message("dialog.edit.hint", scope.getDisplayName(), path));
+        configHint.setToolTipText(path);
     }
 
     @Override
     protected @Nullable ValidationInfo doValidate() {
         if (nameField.getText().trim().isEmpty()) {
-            return new ValidationInfo("名称不能为空", nameField);
+            return new ValidationInfo(RunItBundle.message("dialog.edit.validation.name_required"), nameField);
         }
         return null;
     }
@@ -86,6 +103,11 @@ public class EditActionDialog extends DialogWrapper {
                 selected != null ? selected.key : "run",
                 commandArea.getText()
         );
+    }
+
+    public ActionScope getSelectedScope() {
+        ActionScope scope = (ActionScope) scopeCombo.getSelectedItem();
+        return scope != null ? scope : ActionScope.PROJECT;
     }
 
     private static class IconItem {
@@ -110,7 +132,7 @@ public class EditActionDialog extends DialogWrapper {
             super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
             if (value instanceof IconItem) {
                 IconItem item = (IconItem) value;
-                setText(item.key);
+                setText(RunItBundle.message("icon." + item.key));
                 setIcon(item.icon);
             }
             return this;

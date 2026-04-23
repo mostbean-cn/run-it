@@ -1,8 +1,10 @@
 package com.github.runit.ui;
 
 import com.github.runit.config.ActionConfig;
-import com.github.runit.config.RunItConfig;
+import com.github.runit.config.ActionScope;
 import com.github.runit.config.RunItConfigService;
+import com.github.runit.config.ScopedAction;
+import com.github.runit.i18n.RunItBundle;
 import com.github.runit.ui.settings.EditActionDialog;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.project.Project;
@@ -16,11 +18,13 @@ import java.awt.event.InputEvent;
 public class RunItToolbarActionGroup extends AnAction {
 
     public RunItToolbarActionGroup() {
-        super("RunIt", "RunIt script runner", RunItIcons.TOOLBAR);
+        super(RunItBundle.message("action.toolbar.text"), RunItBundle.message("action.toolbar.description"), RunItIcons.TOOLBAR);
     }
 
     @Override
     public void update(@NotNull AnActionEvent e) {
+        e.getPresentation().setText(RunItBundle.message("action.toolbar.text"));
+        e.getPresentation().setDescription(RunItBundle.message("action.toolbar.description"));
         e.getPresentation().setEnabledAndVisible(true);
     }
 
@@ -32,38 +36,27 @@ public class RunItToolbarActionGroup extends AnAction {
         }
 
         RunItConfigService service = RunItConfigService.getInstance(project);
-        RunItConfig config = service.getConfigIfLoaded();
+        java.util.List<ScopedAction> actions = service.getScopedActions();
+        boolean hasActions = !actions.isEmpty();
         DefaultActionGroup group = new DefaultActionGroup();
+        addActions(group, actions);
 
-        if (config == null) {
-            group.add(new AnAction("加载中...", "Config loading", com.intellij.icons.AllIcons.Actions.Refresh) {
-                @Override
-                public void actionPerformed(@NotNull AnActionEvent e) {}
-            });
+        if (hasActions) {
             group.add(Separator.getInstance());
-        } else {
-            for (int i = 0; i < config.actions.size(); i++) {
-                ActionConfig actionConfig = config.actions.get(i);
-                group.add(new ExecuteAction(actionConfig, i));
-            }
-
-            if (!config.actions.isEmpty()) {
-                group.add(Separator.getInstance());
-            }
         }
 
-        group.add(new AnAction("添加操作", "Add new RunIt action", com.intellij.icons.AllIcons.General.Add) {
+        group.add(new AnAction(RunItBundle.message("action.add.text"), RunItBundle.message("action.add.description"), com.intellij.icons.AllIcons.General.Add) {
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
-                EditActionDialog dialog = new EditActionDialog(project, null, -1);
+                EditActionDialog dialog = new EditActionDialog(project, null, -1, ActionScope.PROJECT);
                 if (dialog.showAndGet()) {
-                    service.addAction(dialog.getActionConfig());
+                    service.addAction(dialog.getSelectedScope(), dialog.getActionConfig());
                 }
             }
         });
 
-        if (config != null && !config.actions.isEmpty()) {
-            group.add(new AnAction("管理操作", "Manage RunIt actions", com.intellij.icons.AllIcons.Actions.Properties) {
+        if (hasActions) {
+            group.add(new AnAction(RunItBundle.message("action.manage.text"), RunItBundle.message("action.manage.description"), com.intellij.icons.AllIcons.Actions.Properties) {
                 @Override
                 public void actionPerformed(@NotNull AnActionEvent e) {
                     ManageActionsDialog dialog = new ManageActionsDialog(project, service);
@@ -80,6 +73,13 @@ public class RunItToolbarActionGroup extends AnAction {
             popup.showUnderneathOf(component);
         } else {
             popup.showInBestPositionFor(e.getDataContext());
+        }
+    }
+
+    private void addActions(DefaultActionGroup group, java.util.List<ScopedAction> actions) {
+        for (ScopedAction scopedAction : actions) {
+            ActionConfig actionConfig = scopedAction.getActionConfig();
+            group.add(new ExecuteAction(actionConfig, scopedAction.getIndex()));
         }
     }
 }

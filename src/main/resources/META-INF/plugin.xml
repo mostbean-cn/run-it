@@ -1,17 +1,28 @@
 <idea-plugin>
     <id>com.github.runit</id>
     <name>RunIt</name>
-    <version>1.0.0</version>
-    <vendor email="runit@example.com" url="https://github.com/runit">RunIt</vendor>
+    <version>0.1.0</version>
+    <vendor>mostbean</vendor>
 
     <description><![CDATA[
-        <p>RunIt - One-click script runner for JetBrains IDEs.</p>
-        <p>Easily configure and run custom scripts directly from the IDE toolbar.</p>
+        <p><strong>RunIt is a lightweight script launcher for JetBrains IDEs, built for teams and individuals who want fast, repeatable project commands directly from the toolbar.</strong></p>
+        <p>Store commands at the project or user level, launch them in one click, and keep your daily build, test, and utility scripts close to the IDE workflow.</p>
+        <hr/>
+        <p><strong>RunIt 是一个面向 JetBrains IDE 的轻量脚本启动器，适合希望把常用项目命令固定在工具栏中的个人开发者和小团队。</strong></p>
+        <p>它支持项目级与用户级脚本管理，在 IDE 内即可一键运行构建、测试、清理和其他日常命令，减少重复打开终端和手动输入的成本。</p>
     ]]></description>
 
     <change-notes><![CDATA[
-        <p>1.0.0 - Initial release with TOML configuration, toolbar button, and command execution.</p>
+        <p><strong>0.1.0</strong></p>
+        <ul>
+            <li>首个版本发布，提供 JetBrains IDE 工具栏一键运行脚本的基础能力。</li>
+            <li>支持项目级与用户级脚本管理，可分别保存和复用常用命令。</li>
+            <li>支持图形化新增、编辑、删除与排序，并可通过标签区分脚本来源。</li>
+            <li>支持项目脚本与全局脚本统一排序，便于按个人习惯组织常用操作。</li>
+        </ul>
     ]]></change-notes>
+
+    <resource-bundle>messages.RunItBundle</resource-bundle>
 
     <idea-version since-build="232"/>
 
@@ -20,13 +31,16 @@
 
     <extensions defaultExtensionNs="com.intellij">
         <projectService serviceImplementation="com.github.runit.config.RunItConfigService"/>
+        <applicationService serviceImplementation="com.github.runit.settings.RunItSettingsService"/>
+        <applicationConfigurable parentId="tools"
+                                 instance="com.github.runit.settings.RunItSettingsConfigurable"
+                                 id="com.github.runit.settings"
+                                 displayName="RunIt"/>
     </extensions>
 
     <actions>
         <action id="RunIt.ToolbarAction"
                 class="com.github.runit.ui.RunItToolbarActionGroup"
-                text="RunIt"
-                description="RunIt script runner"
                 icon="/icons/runIt.svg">
             <add-to-group group-id="MainToolbarRight" anchor="last"/>
         </action>

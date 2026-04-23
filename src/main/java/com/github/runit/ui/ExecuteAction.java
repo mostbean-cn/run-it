@@ -2,6 +2,7 @@ package com.github.runit.ui;
 
 import com.github.runit.config.ActionConfig;
 import com.github.runit.executor.CommandExecutor;
+import com.github.runit.i18n.RunItBundle;
 import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.project.Project;
@@ -14,7 +15,7 @@ public class ExecuteAction extends AnAction {
     private final int index;
 
     public ExecuteAction(ActionConfig actionConfig, int index) {
-        super(actionConfig.name, "Run: " + actionConfig.name, resolveIcon(actionConfig.icon));
+        super(actionConfig.name, RunItBundle.message("action.execute.description", actionConfig.name), resolveIcon(actionConfig.icon));
         this.actionConfig = actionConfig;
         this.index = index;
     }

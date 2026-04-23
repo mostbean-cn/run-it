@@ -1,7 +1,7 @@
 package com.github.runit.executor;
 
 import com.github.runit.config.ActionConfig;
-import com.intellij.execution.DefaultExecutionResult;
+import com.github.runit.i18n.RunItBundle;
 import com.intellij.execution.ExecutionException;
 import com.intellij.execution.ExecutionManager;
 import com.intellij.execution.Executor;
@@ -32,7 +32,7 @@ public class CommandExecutor {
         try {
             TerminalToolWindowManager terminalManager = TerminalToolWindowManager.getInstance(project);
             if (terminalManager != null) {
-                var widget = terminalManager.createLocalShellWidget(project.getBasePath(), "RunIt: " + action.name);
+                var widget = terminalManager.createLocalShellWidget(project.getBasePath(), RunItBundle.message("command.title", action.name));
                 if (widget != null) {
                     widget.executeCommand(command);
                     // Activate Terminal tool window
@@ -52,7 +52,7 @@ public class CommandExecutor {
     }
 
     private static void executeInRunWindow(Project project, ActionConfig action, String command) {
-        String title = "RunIt: " + action.name;
+        String title = RunItBundle.message("command.title", action.name);
         ConsoleView consoleView = TextConsoleBuilderFactory.getInstance().createBuilder(project).getConsole();
 
         try {
@@ -62,7 +62,7 @@ public class CommandExecutor {
                 @Override
                 public void processTerminated(@NotNull ProcessEvent event) {
                     int exitCode = event.getExitCode();
-                    String msg = "\nProcess finished with exit code " + exitCode + "\n";
+                    String msg = RunItBundle.message("command.process.finished", exitCode);
                     consoleView.print(msg, exitCode == 0
                             ? ConsoleViewContentType.NORMAL_OUTPUT
                             : ConsoleViewContentType.ERROR_OUTPUT);
@@ -80,7 +80,7 @@ public class CommandExecutor {
             processHandler.startNotify();
 
         } catch (ExecutionException e) {
-            consoleView.print("Failed to start command: " + e.getMessage() + "\n", ConsoleViewContentType.ERROR_OUTPUT);
+            consoleView.print(RunItBundle.message("command.process.start_failed", e.getMessage()), ConsoleViewContentType.ERROR_OUTPUT);
             RunContentDescriptor descriptor = new RunContentDescriptor(consoleView, null, consoleView.getComponent(), title);
             Executor executor = DefaultRunExecutor.getRunExecutorInstance();
             ExecutionManager.getInstance(project).getContentManager().showRunContent(executor, descriptor);

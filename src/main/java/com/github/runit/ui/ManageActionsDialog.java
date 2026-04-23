@@ -1,8 +1,10 @@
 package com.github.runit.ui;
 
 import com.github.runit.config.ActionConfig;
-import com.github.runit.config.RunItConfig;
+import com.github.runit.config.ActionScope;
 import com.github.runit.config.RunItConfigService;
+import com.github.runit.config.ScopedAction;
+import com.github.runit.i18n.RunItBundle;
 import com.github.runit.ui.settings.EditActionDialog;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
@@ -19,6 +21,7 @@ import javax.swing.border.Border;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.List;
 
 public class ManageActionsDialog extends DialogWrapper {
     private static final Dimension CENTER_SIZE = new Dimension(760, 520);
@@ -26,6 +29,7 @@ public class ManageActionsDialog extends DialogWrapper {
     private static final Color ROW_BACKGROUND = JBColor.namedColor("List.background", new Color(0x1F2225));
     private static final Color BORDER_COLOR = JBColor.namedColor("Borders.color", new Color(0x4A4A4A));
     private static final Color ACCENT_COLOR = JBColor.namedColor("Component.focusedBorderColor", new Color(0x4C84FF));
+    private static final Color HANDLE_COLOR = JBColor.namedColor("Label.disabledForeground", new Color(0x6F7378));
     private static final int ROW_HEIGHT = 96;
 
     private final Project project;
@@ -39,7 +43,7 @@ public class ManageActionsDialog extends DialogWrapper {
         super(project);
         this.project = project;
         this.service = service;
-        setTitle("RunIt - 管理操作");
+        setTitle(RunItBundle.message("dialog.manage.title"));
         setSize(800, 600);
         listPanel = new JPanel();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
@@ -50,19 +54,18 @@ public class ManageActionsDialog extends DialogWrapper {
 
     private void refreshList() {
         listPanel.removeAll();
-        RunItConfig config = service.getConfig();
-        int actionCount = config.actions.size();
+        List<ScopedAction> actions = service.getScopedActions();
+        int actionCount = actions.size();
         if (titleLabel != null) {
-            titleLabel.setText("已配置的操作（" + actionCount + " 个）");
+            titleLabel.setText(RunItBundle.message("dialog.manage.header", actionCount));
         }
 
-        if (config.actions.isEmpty()) {
+        if (actionCount == 0) {
             listPanel.add(createEmptyState());
-        }
-
-        for (int i = 0; i < config.actions.size(); i++) {
-            ActionRow row = new ActionRow(config.actions.get(i), i);
-            listPanel.add(row);
+        } else {
+            for (int i = 0; i < actions.size(); i++) {
+                listPanel.add(new ActionRow(actions.get(i), i));
+            }
         }
         listPanel.revalidate();
         listPanel.repaint();
@@ -89,7 +92,7 @@ public class ManageActionsDialog extends DialogWrapper {
         scrollPane.setHorizontalScrollBarPolicy(ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         panel.add(scrollPane, BorderLayout.CENTER);
 
-        JLabel hint = new JLabel("拖动左侧手柄排序，双击操作可编辑，配置保存到 .runit/runit.toml");
+        JLabel hint = new JLabel(RunItBundle.message("dialog.manage.hint"));
         hint.setForeground(JBColor.GRAY);
         hint.setBorder(JBUI.Borders.empty(12, 20, 16, 20));
         panel.add(hint, BorderLayout.SOUTH);
@@ -100,11 +103,11 @@ public class ManageActionsDialog extends DialogWrapper {
     @Override
     protected void createDefaultActions() {
         super.createDefaultActions();
-        getOKAction().putValue(Action.NAME, "关闭");
+        getOKAction().putValue(Action.NAME, RunItBundle.message("dialog.manage.close"));
     }
 
     private JButton createAddButton() {
-        JButton addButton = new JButton("添加操作", com.intellij.icons.AllIcons.General.Add);
+        JButton addButton = new JButton(RunItBundle.message("action.add.text"), com.intellij.icons.AllIcons.General.Add);
         addButton.setFocusPainted(false);
         addButton.addActionListener(e -> addAction());
         return addButton;
@@ -117,46 +120,56 @@ public class ManageActionsDialog extends DialogWrapper {
         emptyPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
         emptyPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 180));
 
-        JBLabel emptyLabel = new JBLabel("暂无操作，点击右上角添加");
+        JBLabel emptyLabel = new JBLabel(RunItBundle.message("dialog.manage.empty"));
         emptyLabel.setForeground(JBColor.GRAY);
         emptyPanel.add(emptyLabel);
         return emptyPanel;
     }
 
     private void addAction() {
-        EditActionDialog dialog = new EditActionDialog(project, null, -1);
+        EditActionDialog dialog = new EditActionDialog(project, null, -1, ActionScope.PROJECT);
         if (dialog.showAndGet()) {
-            service.addAction(dialog.getActionConfig());
+            service.addAction(dialog.getSelectedScope(), dialog.getActionConfig());
             refreshList();
         }
     }
 
-    private void editAction(ActionConfig actionConfig, int index) {
-        EditActionDialog dialog = new EditActionDialog(project, actionConfig, index);
+    private void editAction(ScopedAction scopedAction) {
+        EditActionDialog dialog = new EditActionDialog(project, scopedAction.getActionConfig(), scopedAction.getIndex(), scopedAction.getScope());
         if (dialog.showAndGet()) {
-            service.updateAction(index, dialog.getActionConfig());
+            service.updateAction(
+                    scopedAction.getScope(),
+                    scopedAction.getIndex(),
+                    dialog.getSelectedScope(),
+                    dialog.getActionConfig()
+            );
             refreshList();
         }
     }
 
-    private void deleteAction(Component parent, ActionConfig actionConfig, int index) {
+    private void deleteAction(ActionConfig actionConfig, ActionScope scope, int index) {
         int confirm = Messages.showYesNoDialog(
                 project,
-                "确定要删除操作 \"" + actionConfig.name + "\" 吗？",
-                "确认删除",
-                "删除",
-                "取消",
+                RunItBundle.message("dialog.manage.delete.message", scope.getDisplayName(), actionConfig.name),
+                RunItBundle.message("dialog.manage.delete.title"),
+                RunItBundle.message("dialog.manage.delete.confirm"),
+                RunItBundle.message("dialog.manage.delete.cancel"),
                 Messages.getQuestionIcon()
         );
         if (confirm == Messages.YES) {
-            service.removeAction(index);
+            service.removeAction(scope, index);
             refreshList();
         }
     }
 
     private int findDropTargetIndex(Point point) {
-        RunItConfig config = service.getConfig();
-        if (config.actions.isEmpty()) {
+        int actionCount = 0;
+        for (Component component : listPanel.getComponents()) {
+            if (component instanceof ActionRow) {
+                actionCount++;
+            }
+        }
+        if (actionCount == 0) {
             return -1;
         }
 
@@ -167,13 +180,13 @@ public class ManageActionsDialog extends DialogWrapper {
 
             Rectangle bounds = row.getBounds();
             if (point.y < bounds.y + bounds.height / 2) {
-                return row.index;
+                return row.displayIndex;
             }
             if (point.y <= bounds.y + bounds.height) {
-                return Math.min(row.index + 1, config.actions.size() - 1);
+                return Math.min(row.displayIndex + 1, actionCount - 1);
             }
         }
-        return config.actions.size() - 1;
+        return actionCount - 1;
     }
 
     private void setDragTargetIndex(int index) {
@@ -222,12 +235,17 @@ public class ManageActionsDialog extends DialogWrapper {
 
     private class ActionRow extends JPanel {
         private final ActionConfig actionConfig;
+        private final ActionScope scope;
         private final int index;
+        private final int displayIndex;
         private boolean hovered;
+        private DragHandle dragHandle;
 
-        ActionRow(ActionConfig action, int idx) {
-            this.actionConfig = action;
-            this.index = idx;
+        ActionRow(ScopedAction scopedAction, int displayIndex) {
+            this.actionConfig = scopedAction.getActionConfig();
+            this.scope = scopedAction.getScope();
+            this.index = scopedAction.getIndex();
+            this.displayIndex = displayIndex;
             setLayout(new BorderLayout());
             updateBorder();
             setBackground(ROW_BACKGROUND);
@@ -256,7 +274,7 @@ public class ManageActionsDialog extends DialogWrapper {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     if (e.getClickCount() == 2) {
-                        editAction(actionConfig, index);
+                        editAction(new ScopedAction(actionConfig, scope, index));
                     }
                 }
             };
@@ -264,16 +282,15 @@ public class ManageActionsDialog extends DialogWrapper {
             JPanel left = new JPanel(new BorderLayout());
             left.setOpaque(false);
 
-            JBLabel dragHandle = new JBLabel("≡");
-            dragHandle.setForeground(JBColor.GRAY);
-            dragHandle.setToolTipText("拖动排序");
+            dragHandle = new DragHandle();
+            dragHandle.setToolTipText(RunItBundle.message("dialog.manage.drag.tooltip"));
             dragHandle.setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
-            dragHandle.setBorder(JBUI.Borders.emptyRight(12));
+            dragHandle.setBorder(JBUI.Borders.emptyRight(14));
             dragHandle.addMouseListener(new MouseAdapter() {
                 @Override
                 public void mousePressed(MouseEvent e) {
-                    dragSourceIndex = index;
-                    setDragTargetIndex(index);
+                    dragSourceIndex = displayIndex;
+                    setDragTargetIndex(displayIndex);
                 }
 
                 @Override
@@ -294,21 +311,27 @@ public class ManageActionsDialog extends DialogWrapper {
                 }
             });
 
-            JLabel iconLabel = new JLabel(ExecuteAction.resolveIcon(action.icon));
+            JLabel iconLabel = new JLabel(ExecuteAction.resolveIcon(actionConfig.icon));
             iconLabel.setBorder(JBUI.Borders.emptyRight(14));
             iconLabel.setVerticalAlignment(SwingConstants.TOP);
 
             JPanel textPanel = new JPanel(new BorderLayout(0, 6));
             textPanel.setOpaque(false);
             textPanel.setMinimumSize(new Dimension(0, 0));
-            JLabel nameLabel = new JLabel(action.name);
+            JLabel nameLabel = new JLabel(actionConfig.name);
             nameLabel.setFont(nameLabel.getFont().deriveFont(Font.BOLD, 14f));
 
-            TruncatedLabel commandLabel = new TruncatedLabel(action.command);
+            TruncatedLabel commandLabel = new TruncatedLabel(actionConfig.command);
             commandLabel.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
             commandLabel.setForeground(JBColor.GRAY);
 
-            textPanel.add(nameLabel, BorderLayout.NORTH);
+            JPanel nameRow = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            nameRow.setOpaque(false);
+            nameRow.add(nameLabel);
+            nameRow.add(Box.createHorizontalStrut(8));
+            nameRow.add(createScopeTag(scope));
+
+            textPanel.add(nameRow, BorderLayout.NORTH);
             textPanel.add(commandLabel, BorderLayout.CENTER);
 
             JPanel actionInfo = new JPanel(new BorderLayout());
@@ -326,14 +349,14 @@ public class ManageActionsDialog extends DialogWrapper {
             right.setMinimumSize(new Dimension(JBUIScale.scale(280), 0));
             right.setPreferredSize(new Dimension(JBUIScale.scale(280), JBUIScale.scale(40)));
 
-            JButton editBtn = new JButton("编辑", com.intellij.icons.AllIcons.Actions.Properties);
+            JButton editBtn = new JButton(RunItBundle.message("dialog.manage.edit"), com.intellij.icons.AllIcons.Actions.Properties);
             editBtn.setFocusPainted(false);
-            editBtn.addActionListener(e -> editAction(actionConfig, index));
+            editBtn.addActionListener(e -> editAction(new ScopedAction(actionConfig, scope, index)));
 
-            JButton delBtn = new JButton("删除", com.intellij.icons.AllIcons.General.Remove);
+            JButton delBtn = new JButton(RunItBundle.message("dialog.manage.delete"), com.intellij.icons.AllIcons.General.Remove);
             delBtn.setFocusPainted(false);
             delBtn.setForeground(JBColor.RED);
-            delBtn.addActionListener(e -> deleteAction(this, actionConfig, index));
+            delBtn.addActionListener(e -> deleteAction(actionConfig, scope, index));
 
             right.add(editBtn);
             right.add(delBtn);
@@ -344,7 +367,70 @@ public class ManageActionsDialog extends DialogWrapper {
         }
 
         private void updateBorder() {
-            setBorder(createRowBorder(hovered, dragSourceIndex >= 0 && dragTargetIndex == index));
+            setBorder(createRowBorder(hovered, dragSourceIndex >= 0 && dragTargetIndex == displayIndex));
+            if (dragHandle != null) {
+                dragHandle.setActive(hovered || dragSourceIndex == displayIndex);
+            }
+        }
+    }
+
+    private JComponent createScopeTag(ActionScope scope) {
+        JLabel label = new JLabel(scope.getDisplayName());
+        label.setOpaque(true);
+        label.setBackground(scope == ActionScope.PROJECT
+                ? new JBColor(new Color(0xD9E8FF), new Color(0x314A6E))
+                : new JBColor(new Color(0xFFE7C4), new Color(0x4C3A20)));
+        label.setForeground(scope == ActionScope.PROJECT
+                ? new JBColor(new Color(0x1F3A5B), Color.WHITE)
+                : new JBColor(new Color(0x5A3A12), Color.WHITE));
+        label.setBorder(JBUI.Borders.empty(3, 8));
+        return label;
+    }
+
+    private static class DragHandle extends JComponent {
+        private static final int DOT_SIZE = 3;
+        private static final int DOT_GAP = 4;
+        private boolean active;
+
+        DragHandle() {
+            setOpaque(false);
+            setPreferredSize(new Dimension(JBUIScale.scale(14), JBUIScale.scale(28)));
+        }
+
+        void setActive(boolean active) {
+            if (this.active == active) {
+                return;
+            }
+            this.active = active;
+            repaint();
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            Graphics2D g2 = (Graphics2D) g.create();
+            try {
+                g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                Color color = active ? ACCENT_COLOR : HANDLE_COLOR;
+                g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), active ? 180 : 90));
+
+                int dotSize = JBUIScale.scale(DOT_SIZE);
+                int dotGap = JBUIScale.scale(DOT_GAP);
+                int totalWidth = dotSize * 2 + dotGap;
+                int totalHeight = dotSize * 3 + dotGap * 2;
+                int startX = (getWidth() - totalWidth) / 2;
+                int startY = (getHeight() - totalHeight) / 2;
+
+                for (int row = 0; row < 3; row++) {
+                    for (int col = 0; col < 2; col++) {
+                        int x = startX + col * (dotSize + dotGap);
+                        int y = startY + row * (dotSize + dotGap);
+                        g2.fillOval(x, y, dotSize, dotSize);
+                    }
+                }
+            } finally {
+                g2.dispose();
+            }
         }
     }
 
