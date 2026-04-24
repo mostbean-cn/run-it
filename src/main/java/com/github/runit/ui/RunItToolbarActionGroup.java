@@ -22,6 +22,11 @@ public class RunItToolbarActionGroup extends AnAction {
     }
 
     @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
+    }
+
+    @Override
     public void update(@NotNull AnActionEvent e) {
         e.getPresentation().setText(RunItBundle.message("action.toolbar.text"));
         e.getPresentation().setDescription(RunItBundle.message("action.toolbar.description"));
@@ -47,6 +52,11 @@ public class RunItToolbarActionGroup extends AnAction {
 
         group.add(new AnAction(RunItBundle.message("action.add.text"), RunItBundle.message("action.add.description"), com.intellij.icons.AllIcons.General.Add) {
             @Override
+            public @NotNull ActionUpdateThread getActionUpdateThread() {
+                return ActionUpdateThread.BGT;
+            }
+
+            @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
                 EditActionDialog dialog = new EditActionDialog(project, null, -1, ActionScope.PROJECT);
                 if (dialog.showAndGet()) {
@@ -57,6 +67,11 @@ public class RunItToolbarActionGroup extends AnAction {
 
         if (hasActions) {
             group.add(new AnAction(RunItBundle.message("action.manage.text"), RunItBundle.message("action.manage.description"), com.intellij.icons.AllIcons.Actions.Properties) {
+                @Override
+                public @NotNull ActionUpdateThread getActionUpdateThread() {
+                    return ActionUpdateThread.BGT;
+                }
+
                 @Override
                 public void actionPerformed(@NotNull AnActionEvent e) {
                     ManageActionsDialog dialog = new ManageActionsDialog(project, service);

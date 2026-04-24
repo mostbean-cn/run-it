@@ -15,10 +15,7 @@ import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.openapi.project.Project;
-import com.intellij.openapi.wm.ToolWindow;
-import com.intellij.openapi.wm.ToolWindowManager;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.plugins.terminal.TerminalToolWindowManager;
 
 public class CommandExecutor {
 
@@ -28,31 +25,15 @@ public class CommandExecutor {
             return;
         }
 
-        // Try to use Terminal tool window first
-        try {
-            TerminalToolWindowManager terminalManager = TerminalToolWindowManager.getInstance(project);
-            if (terminalManager != null) {
-                var widget = terminalManager.createLocalShellWidget(project.getBasePath(), RunItBundle.message("command.title", action.name));
-                if (widget != null) {
-                    widget.executeCommand(command);
-                    // Activate Terminal tool window
-                    ToolWindow terminalToolWindow = ToolWindowManager.getInstance(project).getToolWindow("Terminal");
-                    if (terminalToolWindow != null) {
-                        terminalToolWindow.activate(null);
-                    }
-                    return;
-                }
-            }
-        } catch (Exception e) {
-            // Fallback to Run tool window if Terminal is not available
+        String title = RunItBundle.message("command.title", action.name);
+        if (TerminalCommandRunner.execute(project, title, command)) {
+            return;
         }
 
-        // Fallback: execute in Run tool window
-        executeInRunWindow(project, action, command);
+        executeInRunWindow(project, title, command);
     }
 
-    private static void executeInRunWindow(Project project, ActionConfig action, String command) {
-        String title = RunItBundle.message("command.title", action.name);
+    private static void executeInRunWindow(Project project, String title, String command) {
         ConsoleView consoleView = TextConsoleBuilderFactory.getInstance().createBuilder(project).getConsole();
 
         try {
