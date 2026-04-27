@@ -17,10 +17,14 @@ final class TerminalCommandRunner {
     }
 
     static boolean execute(Project project, String title, String command) {
-        if (executeInReworkedTerminal(project, title, command)) {
+        if (executeInTerminalToolWindow(project, title, command)) {
             return true;
         }
 
+        return executeInReworkedTerminal(project, title, command);
+    }
+
+    private static boolean executeInTerminalToolWindow(Project project, String title, String command) {
         try {
             Object terminalManager = getTerminalManager(project);
             if (terminalManager == null) {
@@ -29,18 +33,18 @@ final class TerminalCommandRunner {
 
             String workingDirectory = project.getBasePath();
             Object widget = createShellWidget(terminalManager, workingDirectory, title);
-            if (widget != null && sendCommandToTerminal(widget, command)) {
+            if (widget != null && executeTerminalCommand(widget, command)) {
                 activateTerminal(project);
                 return true;
             }
 
             Object legacyWidget = createLegacyShellWidget(terminalManager, workingDirectory, title);
-            if (legacyWidget != null && executeLegacyTerminalCommand(legacyWidget, command)) {
+            if (legacyWidget != null && executeTerminalCommand(legacyWidget, command)) {
                 activateTerminal(project);
                 return true;
             }
         } catch (ReflectiveOperationException | LinkageError ignored) {
-            // Terminal APIs moved across IDE versions. Fall back to the stable Run tool window.
+            // Terminal APIs moved across IDE versions. Try the reworked terminal path next.
         }
         return false;
     }
@@ -61,9 +65,9 @@ final class TerminalCommandRunner {
 
             Object tab = invoke(tabBuilder.getClass().getMethod("createTab"), tabBuilder);
             Object view = invoke(tab.getClass().getMethod("getView"), tab);
-            Object sendTextBuilder = invoke(view.getClass().getMethod("createSendTextBuilder"), view);
-            Object executableTextBuilder = invoke(sendTextBuilder.getClass().getMethod("shouldExecute"), sendTextBuilder);
-            invoke(executableTextBuilder.getClass().getMethod("send", String.class), executableTextBuilder, command);
+            if (!sendCommandToReworkedTerminal(view, command)) {
+                return false;
+            }
             activateTerminal(project);
             return true;
         } catch (ReflectiveOperationException | LinkageError ignored) {
@@ -93,12 +97,13 @@ final class TerminalCommandRunner {
         }
     }
 
-    private static void invokeIfAvailable(Object target, String methodName, boolean argument)
+    private static Object invokeIfAvailable(Object target, String methodName, boolean argument)
             throws ReflectiveOperationException {
         Method method = findMethod(target.getClass(), methodName, boolean.class);
-        if (method != null) {
-            invoke(method, target, argument);
+        if (method == null) {
+            return null;
         }
+        return invoke(method, target, argument);
     }
 
     private static Object createShellWidget(Object terminalManager, String workingDirectory, String title)
@@ -117,13 +122,23 @@ final class TerminalCommandRunner {
         return invoke(createShellWidget, terminalManager, workingDirectory, title, true, true);
     }
 
-    private static boolean sendCommandToTerminal(Object widget, String command) throws ReflectiveOperationException {
-        Method sendCommand = findMethod(widget.getClass(), "sendCommandToExecute", String.class);
+    private static boolean executeTerminalCommand(Object widget, String command) {
+        if (sendCommandToTerminal(widget, command)) {
+            return true;
+        }
+        if (executeLegacyTerminalCommand(widget, command)) {
+            return true;
+        }
+        Object shellWidget = unwrapShellTerminalWidget(widget);
+        return shellWidget != null && executeLegacyTerminalCommand(shellWidget, command);
+    }
+
+    private static boolean sendCommandToTerminal(Object widget, String command) {
+        Method sendCommand = findTerminalWidgetMethod(widget, "sendCommandToExecute");
         if (sendCommand == null) {
             return false;
         }
-        invoke(sendCommand, widget, command);
-        return true;
+        return invokeCommandMethod(sendCommand, widget, command);
     }
 
     private static Object createLegacyShellWidget(Object terminalManager, String workingDirectory, String title)
@@ -140,13 +155,82 @@ final class TerminalCommandRunner {
         return invoke(createLocalShellWidget, terminalManager, workingDirectory, title);
     }
 
-    private static boolean executeLegacyTerminalCommand(Object widget, String command) throws ReflectiveOperationException {
+    private static boolean executeLegacyTerminalCommand(Object widget, String command) {
         Method executeCommand = findMethod(widget.getClass(), "executeCommand", String.class);
         if (executeCommand == null) {
             return false;
         }
-        invoke(executeCommand, widget, command);
-        return true;
+        return invokeCommandMethod(executeCommand, widget, command);
+    }
+
+    private static boolean sendCommandToReworkedTerminal(Object view, String command) throws ReflectiveOperationException {
+        Method createSendTextBuilder = findMethod(view.getClass(), "createSendTextBuilder");
+        if (createSendTextBuilder == null) {
+            return false;
+        }
+
+        Object sendTextBuilder = invoke(createSendTextBuilder, view);
+        Object executableTextBuilder = invokeIfAvailable(sendTextBuilder, "shouldExecute", true);
+        if (executableTextBuilder == null) {
+            executableTextBuilder = invokeIfAvailable(sendTextBuilder, "shouldExecute");
+        }
+        if (executableTextBuilder == null) {
+            executableTextBuilder = sendTextBuilder;
+        }
+        return invokeCommandMethod(executableTextBuilder, command, "sendText", "send");
+    }
+
+    private static Object unwrapShellTerminalWidget(Object widget) {
+        try {
+            Class<?> shellWidgetClass = Class.forName("org.jetbrains.plugins.terminal.ShellTerminalWidget");
+            if (shellWidgetClass.isInstance(widget)) {
+                return widget;
+            }
+
+            Class<?> terminalWidgetClass = Class.forName("com.intellij.terminal.ui.TerminalWidget");
+            if (!terminalWidgetClass.isInstance(widget)) {
+                return null;
+            }
+
+            Method asShellWidget = findMethod(shellWidgetClass, "asShellJediTermWidget", terminalWidgetClass);
+            if (asShellWidget == null) {
+                asShellWidget = findMethod(shellWidgetClass, "toShellJediTermWidgetOrThrow", terminalWidgetClass);
+            }
+            if (asShellWidget == null) {
+                return null;
+            }
+            return invoke(asShellWidget, null, widget);
+        } catch (ReflectiveOperationException | LinkageError ignored) {
+            return null;
+        }
+    }
+
+    private static boolean invokeCommandMethod(Object target, String command, String... methodNames) {
+        for (String methodName : methodNames) {
+            Method method = findMethod(target.getClass(), methodName, String.class);
+            if (method != null && invokeCommandMethod(method, target, command)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean invokeCommandMethod(Method method, Object target, String command) {
+        try {
+            invoke(method, target, command);
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError ignored) {
+            return false;
+        }
+    }
+
+    private static Object invokeIfAvailable(Object target, String methodName)
+            throws ReflectiveOperationException {
+        Method method = findMethod(target.getClass(), methodName);
+        if (method == null) {
+            return null;
+        }
+        return invoke(method, target);
     }
 
     private static Method findMethod(Class<?> type, String name, Class<?>... parameterTypes) {
@@ -155,7 +239,44 @@ final class TerminalCommandRunner {
             try {
                 return current.getMethod(name, parameterTypes);
             } catch (NoSuchMethodException ignored) {
-                current = current.getSuperclass();
+            }
+
+            try {
+                return current.getDeclaredMethod(name, parameterTypes);
+            } catch (NoSuchMethodException ignored) {
+            }
+
+            Method interfaceMethod = findInterfaceMethod(current, name, parameterTypes);
+            if (interfaceMethod != null) {
+                return interfaceMethod;
+            }
+
+            current = current.getSuperclass();
+        }
+        return null;
+    }
+
+    private static Method findTerminalWidgetMethod(Object widget, String name) {
+        try {
+            Class<?> terminalWidgetClass = Class.forName("com.intellij.terminal.ui.TerminalWidget");
+            if (terminalWidgetClass.isInstance(widget)) {
+                return terminalWidgetClass.getMethod(name, String.class);
+            }
+        } catch (ReflectiveOperationException ignored) {
+        }
+        return findMethod(widget.getClass(), name, String.class);
+    }
+
+    private static Method findInterfaceMethod(Class<?> type, String name, Class<?>... parameterTypes) {
+        for (Class<?> interfaceType : type.getInterfaces()) {
+            try {
+                return interfaceType.getMethod(name, parameterTypes);
+            } catch (NoSuchMethodException ignored) {
+            }
+
+            Method method = findInterfaceMethod(interfaceType, name, parameterTypes);
+            if (method != null) {
+                return method;
             }
         }
         return null;
@@ -163,6 +284,12 @@ final class TerminalCommandRunner {
 
     private static Object invoke(Method method, Object target, Object... args) throws ReflectiveOperationException {
         try {
+            try {
+                if (!method.canAccess(target)) {
+                    method.setAccessible(true);
+                }
+            } catch (RuntimeException ignored) {
+            }
             return method.invoke(target, args);
         } catch (InvocationTargetException e) {
             Throwable cause = e.getCause();

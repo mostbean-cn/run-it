@@ -3,7 +3,6 @@ package com.github.runit.executor;
 import com.github.runit.config.ActionConfig;
 import com.github.runit.i18n.RunItBundle;
 import com.intellij.execution.ExecutionException;
-import com.intellij.execution.ExecutionManager;
 import com.intellij.execution.Executor;
 import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.executors.DefaultRunExecutor;
@@ -14,6 +13,7 @@ import com.intellij.execution.process.ProcessEvent;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
+import com.intellij.execution.ui.RunContentManager;
 import com.intellij.openapi.project.Project;
 import org.jetbrains.annotations.NotNull;
 
@@ -56,7 +56,7 @@ public class CommandExecutor {
             descriptor.setAutoFocusContent(true);
 
             Executor executor = DefaultRunExecutor.getRunExecutorInstance();
-            ExecutionManager.getInstance(project).getContentManager().showRunContent(executor, descriptor);
+            RunContentManager.getInstance(project).showRunContent(executor, descriptor);
 
             processHandler.startNotify();
 
@@ -64,7 +64,7 @@ public class CommandExecutor {
             consoleView.print(RunItBundle.message("command.process.start_failed", e.getMessage()), ConsoleViewContentType.ERROR_OUTPUT);
             RunContentDescriptor descriptor = new RunContentDescriptor(consoleView, null, consoleView.getComponent(), title);
             Executor executor = DefaultRunExecutor.getRunExecutorInstance();
-            ExecutionManager.getInstance(project).getContentManager().showRunContent(executor, descriptor);
+            RunContentManager.getInstance(project).showRunContent(executor, descriptor);
         }
     }
 

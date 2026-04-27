@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.github.runit</id>
     <name>RunIt</name>
-    <version>0.1.0</version>
+    <version>0.1.1</version>
     <vendor>mostbean</vendor>
 
     <description><![CDATA[
@@ -13,6 +13,13 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <p><strong>0.1.1</strong></p>
+        <ul>
+            <li>修复 Marketplace 插件验证中的废弃终端 API 告警。</li>
+            <li>适配新版 Reworked Terminal API，并保留旧版 IDE 的终端执行兼容逻辑。</li>
+            <li>补充 Action 更新线程声明，提升新版 IntelliJ Platform 的兼容性。</li>
+        </ul>
+
         <p><strong>0.1.0</strong></p>
         <ul>
             <li>首个版本发布，提供 JetBrains IDE 工具栏一键运行脚本的基础能力。</li>
