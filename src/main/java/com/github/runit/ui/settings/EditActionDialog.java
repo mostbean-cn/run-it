@@ -18,17 +18,16 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.Map;
 
 public class EditActionDialog extends DialogWrapper {
+    private static final ActionScope DEFAULT_SCOPE = ActionScope.GLOBAL;
     private final Project project;
     private final JBTextField nameField;
     private final JComboBox<ActionScope> scopeCombo;
+    private final JComboBox<RunItIcons.IconCategory> iconCategoryCombo;
     private final JComboBox<IconItem> iconCombo;
     private final JBTextArea commandArea;
     private final JBLabel configHint;
-
-    private static final Map<String, javax.swing.Icon> ICON_MAP = RunItIcons.availableIcons();
 
     public EditActionDialog(Project project, ActionConfig config, int index, ActionScope initialScope) {
         super(project);
@@ -37,25 +36,18 @@ public class EditActionDialog extends DialogWrapper {
 
         nameField = new JBTextField(config != null ? config.name : "");
         scopeCombo = new JComboBox<>(ActionScope.values());
-        scopeCombo.setSelectedItem(initialScope != null ? initialScope : ActionScope.PROJECT);
+        scopeCombo.setSelectedItem(initialScope != null ? initialScope : DEFAULT_SCOPE);
+        iconCategoryCombo = new JComboBox<>(RunItIcons.IconCategory.values());
+        iconCategoryCombo.setRenderer(new IconCategoryRenderer());
         iconCombo = new JComboBox<>();
-        for (Map.Entry<String, javax.swing.Icon> entry : ICON_MAP.entrySet()) {
-            iconCombo.addItem(new IconItem(entry.getKey(), entry.getValue()));
-        }
-        if (config != null && config.icon != null) {
-            for (int i = 0; i < iconCombo.getItemCount(); i++) {
-                if (iconCombo.getItemAt(i).key.equals(config.icon)) {
-                    iconCombo.setSelectedIndex(i);
-                    break;
-                }
-            }
-        }
         iconCombo.setRenderer(new IconListRenderer());
+        initializeIconSelection(config != null ? config.icon : null);
         commandArea = new JBTextArea(config != null ? config.command : "", 6, 40);
         commandArea.setLineWrap(true);
         commandArea.setWrapStyleWord(true);
         configHint = createConfigHint();
         scopeCombo.addActionListener(e -> updateConfigHint());
+        iconCategoryCombo.addActionListener(e -> updateIconOptions());
 
         init();
         updateConfigHint();
@@ -66,11 +58,20 @@ public class EditActionDialog extends DialogWrapper {
         JPanel panel = FormBuilder.createFormBuilder()
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.name"), nameField)
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.scope"), scopeCombo)
-                .addLabeledComponent(RunItBundle.message("dialog.edit.label.icon"), iconCombo)
+                .addLabeledComponent(RunItBundle.message("dialog.edit.label.icon"), createIconSelector())
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.command"), JBUI.Panels.simplePanel(new JScrollPane(commandArea)))
                 .addComponent(configHint)
                 .getPanel();
         panel.setMinimumSize(new Dimension(450, 250));
+        return panel;
+    }
+
+    private JComponent createIconSelector() {
+        JPanel panel = new JPanel(new BorderLayout(8, 0));
+        panel.setOpaque(false);
+        iconCategoryCombo.setPreferredSize(new Dimension(120, iconCategoryCombo.getPreferredSize().height));
+        panel.add(iconCategoryCombo, BorderLayout.WEST);
+        panel.add(iconCombo, BorderLayout.CENTER);
         return panel;
     }
 
@@ -86,6 +87,48 @@ public class EditActionDialog extends DialogWrapper {
         String path = RunItConfigPaths.getDisplayPath(project, scope);
         configHint.setText(RunItBundle.message("dialog.edit.hint", scope.getDisplayName(), path));
         configHint.setToolTipText(path);
+    }
+
+    private void initializeIconSelection(String iconKey) {
+        RunItIcons.IconDefinition definition = RunItIcons.findDefinition(iconKey);
+        iconCategoryCombo.setSelectedItem(definition.category());
+        populateIconCombo(definition.category());
+        selectIcon(definition.key());
+    }
+
+    private void updateIconOptions() {
+        IconItem selected = (IconItem) iconCombo.getSelectedItem();
+        String previousIconKey = selected != null ? selected.key : null;
+        RunItIcons.IconCategory category = getSelectedIconCategory();
+        populateIconCombo(category);
+        if (!selectIcon(previousIconKey) && iconCombo.getItemCount() > 0) {
+            iconCombo.setSelectedIndex(0);
+        }
+    }
+
+    private void populateIconCombo(RunItIcons.IconCategory category) {
+        iconCombo.removeAllItems();
+        for (RunItIcons.IconDefinition definition : RunItIcons.availableIconDefinitions(category)) {
+            iconCombo.addItem(new IconItem(definition.key(), definition.icon()));
+        }
+    }
+
+    private boolean selectIcon(String iconKey) {
+        if (iconKey == null) {
+            return false;
+        }
+        for (int i = 0; i < iconCombo.getItemCount(); i++) {
+            if (iconKey.equals(iconCombo.getItemAt(i).key)) {
+                iconCombo.setSelectedIndex(i);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private RunItIcons.IconCategory getSelectedIconCategory() {
+        RunItIcons.IconCategory category = (RunItIcons.IconCategory) iconCategoryCombo.getSelectedItem();
+        return category != null ? category : RunItIcons.IconCategory.DEV;
     }
 
     @Override
@@ -140,7 +183,7 @@ public class EditActionDialog extends DialogWrapper {
 
     public ActionScope getSelectedScope() {
         ActionScope scope = (ActionScope) scopeCombo.getSelectedItem();
-        return scope != null ? scope : ActionScope.PROJECT;
+        return scope != null ? scope : DEFAULT_SCOPE;
     }
 
     private static class IconItem {
@@ -155,6 +198,18 @@ public class EditActionDialog extends DialogWrapper {
         @Override
         public String toString() {
             return key;
+        }
+    }
+
+    private static class IconCategoryRenderer extends DefaultListCellRenderer {
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index,
+                                                       boolean isSelected, boolean cellHasFocus) {
+            super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
+            if (value instanceof RunItIcons.IconCategory category) {
+                setText(RunItBundle.message(category.getMessageKey()));
+            }
+            return this;
         }
     }
 

@@ -1,7 +1,6 @@
 package com.github.runit.ui;
 
 import com.github.runit.config.ActionConfig;
-import com.github.runit.config.ActionScope;
 import com.github.runit.config.RunItConfigService;
 import com.github.runit.config.ScopedAction;
 import com.github.runit.i18n.RunItBundle;
@@ -58,7 +57,7 @@ public class RunItToolbarActionGroup extends AnAction {
 
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
-                EditActionDialog dialog = new EditActionDialog(project, null, -1, ActionScope.PROJECT);
+                EditActionDialog dialog = new EditActionDialog(project, null, -1, null);
                 if (dialog.showAndGet()) {
                     service.addAction(dialog.getSelectedScope(), dialog.getActionConfig());
                 }

@@ -127,7 +127,7 @@ public class ManageActionsDialog extends DialogWrapper {
     }
 
     private void addAction() {
-        EditActionDialog dialog = new EditActionDialog(project, null, -1, ActionScope.PROJECT);
+        EditActionDialog dialog = new EditActionDialog(project, null, -1, null);
         if (dialog.showAndGet()) {
             service.addAction(dialog.getSelectedScope(), dialog.getActionConfig());
             refreshList();
