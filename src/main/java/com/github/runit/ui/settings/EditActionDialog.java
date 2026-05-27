@@ -96,6 +96,39 @@ public class EditActionDialog extends DialogWrapper {
         return null;
     }
 
+    @Override
+    protected void doOKAction() {
+        String command = commandArea.getText();
+        if (hasSuspectedEscapes(command)) {
+            int exitCode = com.intellij.openapi.ui.Messages.showYesNoCancelDialog(
+                    project,
+                    RunItBundle.message("dialog.edit.escape_warning.message"),
+                    RunItBundle.message("dialog.edit.escape_warning.title"),
+                    RunItBundle.message("dialog.edit.escape_warning.yes"),
+                    RunItBundle.message("dialog.edit.escape_warning.no"),
+                    RunItBundle.message("dialog.edit.escape_warning.cancel"),
+                    com.intellij.openapi.ui.Messages.getQuestionIcon()
+            );
+            if (exitCode == com.intellij.openapi.ui.Messages.CANCEL) {
+                return;
+            }
+            if (exitCode == com.intellij.openapi.ui.Messages.YES) {
+                commandArea.setText(unescapeCommand(command));
+            }
+        }
+        super.doOKAction();
+    }
+
+    private boolean hasSuspectedEscapes(String s) {
+        if (s == null) return false;
+        return s.contains("\\\"") || s.contains("\\\\");
+    }
+
+    private String unescapeCommand(String s) {
+        if (s == null) return "";
+        return s.replace("\\\"", "\"").replace("\\\\", "\\");
+    }
+
     public ActionConfig getActionConfig() {
         IconItem selected = (IconItem) iconCombo.getSelectedItem();
         return new ActionConfig(

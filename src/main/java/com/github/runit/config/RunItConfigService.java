@@ -11,6 +11,7 @@ import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.openapi.vfs.VirtualFileManager;
 import com.intellij.openapi.vfs.newvfs.BulkFileListener;
 import com.intellij.openapi.vfs.newvfs.events.VFileEvent;
+import com.github.runit.i18n.RunItBundle;
 import com.moandjiezana.toml.Toml;
 import org.jetbrains.annotations.NotNull;
 
@@ -88,9 +89,25 @@ public class RunItConfigService implements Disposable {
                 return loaded;
             } catch (Exception e) {
                 LOG.warn("Failed to load RunIt config from " + file.getAbsolutePath(), e);
+                showConfigLoadErrorNotification(file, scope, e);
             }
         }
         return new RunItConfig();
+    }
+
+    private void showConfigLoadErrorNotification(File file, ActionScope scope, Exception e) {
+        String scopeName = scope == ActionScope.GLOBAL
+                ? RunItBundle.message("scope.global")
+                : RunItBundle.message("scope.project");
+        String title = RunItBundle.message("notification.config.load_failed.title");
+        String content = RunItBundle.message("notification.config.load_failed.content", scopeName, e.getMessage(), file.getAbsolutePath());
+
+        ApplicationManager.getApplication().invokeLater(() -> {
+            com.intellij.notification.NotificationGroupManager.getInstance()
+                    .getNotificationGroup("RunIt")
+                    .createNotification(title, content, com.intellij.notification.NotificationType.ERROR)
+                    .notify(project);
+        });
     }
 
     private void reloadConfig(ActionScope scope) {

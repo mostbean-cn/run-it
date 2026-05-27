@@ -18,9 +18,25 @@ public class RunItConfig {
             sb.append("id = \"").append(escape(action.id)).append("\"\n");
             sb.append("name = \"").append(escape(action.name)).append("\"\n");
             sb.append("icon = \"").append(escape(action.icon)).append("\"\n");
-            sb.append("command = \"").append(escape(action.command)).append("\"\n\n");
+            if (canUseLiteralString(action.command)) {
+                sb.append("command = '").append(action.command).append("'\n\n");
+            } else if (canUseMultilineLiteralString(action.command)) {
+                sb.append("command = '''").append(action.command).append("'''\n\n");
+            } else {
+                sb.append("command = \"").append(escape(action.command)).append("\"\n\n");
+            }
         }
         return sb.toString();
+    }
+
+    private boolean canUseLiteralString(String s) {
+        if (s == null) return false;
+        return !s.contains("'") && !s.contains("\n") && !s.contains("\r");
+    }
+
+    private boolean canUseMultilineLiteralString(String s) {
+        if (s == null) return false;
+        return !s.contains("'''");
     }
 
     private String escape(String s) {

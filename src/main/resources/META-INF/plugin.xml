@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.github.runit</id>
     <name>RunIt</name>
-    <version>0.1.1</version>
+    <version>0.1.2</version>
     <vendor>mostbean</vendor>
 
     <description><![CDATA[
@@ -13,6 +13,12 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <p><strong>0.1.2</strong></p>
+        <ul>
+            <li>优化配置文件序列化格式，支持使用 TOML 字面量字符串存储命令，避免手动转义反斜杠的烦恼。</li>
+            <li>优化 UI 新增或编辑动作时的命令保存逻辑，智能检测手打的转义符号并引导一键还原。</li>
+        </ul>
+
         <p><strong>0.1.1</strong></p>
         <ul>
             <li>修复 Marketplace 插件验证中的废弃终端 API 告警。</li>
@@ -43,6 +49,7 @@
                                  instance="com.github.runit.settings.RunItSettingsConfigurable"
                                  id="com.github.runit.settings"
                                  displayName="RunIt"/>
+        <notificationGroup id="RunIt" displayType="BALLOON"/>
     </extensions>
 
     <actions>
