@@ -8,8 +8,8 @@ import com.intellij.execution.configurations.GeneralCommandLine;
 import com.intellij.execution.executors.DefaultRunExecutor;
 import com.intellij.execution.filters.TextConsoleBuilderFactory;
 import com.intellij.execution.process.OSProcessHandler;
-import com.intellij.execution.process.ProcessAdapter;
 import com.intellij.execution.process.ProcessEvent;
+import com.intellij.execution.process.ProcessListener;
 import com.intellij.execution.ui.ConsoleView;
 import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
@@ -39,7 +39,7 @@ public class CommandExecutor {
         try {
             GeneralCommandLine cmdLine = buildCommandLine(project, command);
             OSProcessHandler processHandler = new OSProcessHandler(cmdLine);
-            processHandler.addProcessListener(new ProcessAdapter() {
+            processHandler.addProcessListener(new ProcessListener() {
                 @Override
                 public void processTerminated(@NotNull ProcessEvent event) {
                     int exitCode = event.getExitCode();
