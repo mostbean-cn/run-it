@@ -12,6 +12,7 @@ import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
+import com.intellij.ui.scale.JBUIScale;
 import com.intellij.util.ui.FormBuilder;
 import com.intellij.util.ui.JBUI;
 import org.jetbrains.annotations.Nullable;
@@ -21,6 +22,8 @@ import java.awt.*;
 
 public class EditActionDialog extends DialogWrapper {
     private static final ActionScope DEFAULT_SCOPE = ActionScope.GLOBAL;
+    private static final int ICON_CATEGORY_WIDTH = 76;
+    private static final int ICON_SELECTOR_WIDTH = 176;
     private final Project project;
     private final JBTextField nameField;
     private final JComboBox<ActionScope> scopeCombo;
@@ -67,11 +70,22 @@ public class EditActionDialog extends DialogWrapper {
     }
 
     private JComponent createIconSelector() {
-        JPanel panel = new JPanel(new BorderLayout(8, 0));
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUIScale.scale(8), 0));
         panel.setOpaque(false);
-        iconCategoryCombo.setPreferredSize(new Dimension(120, iconCategoryCombo.getPreferredSize().height));
-        panel.add(iconCategoryCombo, BorderLayout.WEST);
-        panel.add(iconCombo, BorderLayout.CENTER);
+        Dimension categorySize = iconCategoryCombo.getPreferredSize();
+        categorySize.width = JBUIScale.scale(ICON_CATEGORY_WIDTH);
+        iconCategoryCombo.setMinimumSize(categorySize);
+        iconCategoryCombo.setPreferredSize(categorySize);
+        iconCategoryCombo.setMaximumSize(categorySize);
+
+        Dimension iconSize = iconCombo.getPreferredSize();
+        iconSize.width = JBUIScale.scale(ICON_SELECTOR_WIDTH);
+        iconCombo.setMinimumSize(iconSize);
+        iconCombo.setPreferredSize(iconSize);
+        iconCombo.setMaximumSize(iconSize);
+
+        panel.add(iconCategoryCombo);
+        panel.add(iconCombo);
         return panel;
     }
 

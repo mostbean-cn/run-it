@@ -50,14 +50,14 @@ public final class RunItIcons {
 
     private static List<IconDefinition> createIconDefinitions() {
         List<IconDefinition> definitions = new ArrayList<>();
-        definitions.add(new IconDefinition("run", RUN_COMMAND, IconCategory.DEV));
         definitions.add(new IconDefinition("clean", com.intellij.icons.AllIcons.Actions.GC, IconCategory.DEV));
         definitions.add(new IconDefinition("build", com.intellij.icons.AllIcons.Actions.Compile, IconCategory.DEV));
+        definitions.add(new IconDefinition("terminal", com.intellij.icons.AllIcons.Toolwindows.ToolWindowRun, IconCategory.DEV));
+        definitions.add(new IconDefinition("refresh", com.intellij.icons.AllIcons.Actions.Refresh, IconCategory.DEV));
+        definitions.add(new IconDefinition("run", RUN_COMMAND, IconCategory.DEV));
         definitions.add(new IconDefinition("test", com.intellij.icons.AllIcons.Actions.RunAll, IconCategory.DEV));
         definitions.add(new IconDefinition("deploy", com.intellij.icons.AllIcons.Nodes.Deploy, IconCategory.DEV));
-        definitions.add(new IconDefinition("terminal", com.intellij.icons.AllIcons.Toolwindows.ToolWindowRun, IconCategory.DEV));
         definitions.add(new IconDefinition("debug", com.intellij.icons.AllIcons.Actions.StartDebugger, IconCategory.DEV));
-        definitions.add(new IconDefinition("refresh", com.intellij.icons.AllIcons.Actions.Refresh, IconCategory.DEV));
 
         definitions.add(new IconDefinition("anthropic", loadBundledIcon("anthropic"), IconCategory.AI));
         definitions.add(new IconDefinition("deepSeek", loadBundledIcon("deepSeek"), IconCategory.AI));
