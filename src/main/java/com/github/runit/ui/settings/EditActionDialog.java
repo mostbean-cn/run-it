@@ -19,6 +19,8 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public class EditActionDialog extends DialogWrapper {
     private static final ActionScope DEFAULT_SCOPE = ActionScope.GLOBAL;
@@ -29,17 +31,26 @@ public class EditActionDialog extends DialogWrapper {
     private final JComboBox<ActionScope> scopeCombo;
     private final JComboBox<RunItIcons.IconCategory> iconCategoryCombo;
     private final JComboBox<IconItem> iconCombo;
+    private final JCheckBox disabledForCurrentProjectCheckBox;
     private final JBTextArea commandArea;
     private final JBLabel configHint;
+    private final String currentProjectKey;
+    private final List<String> disabledProjectKeys;
 
     public EditActionDialog(Project project, ActionConfig config, int index, ActionScope initialScope) {
         super(project);
         this.project = project;
+        this.currentProjectKey = RunItConfigPaths.getProjectKey(project);
+        this.disabledProjectKeys = config != null && config.disabledProjectKeys != null
+                ? new ArrayList<>(config.disabledProjectKeys)
+                : new ArrayList<>();
         setTitle(index < 0 ? RunItBundle.message("dialog.edit.add.title") : RunItBundle.message("dialog.edit.edit.title"));
 
         nameField = new JBTextField(config != null ? config.name : "");
         scopeCombo = new JComboBox<>(ActionScope.values());
         scopeCombo.setSelectedItem(initialScope != null ? initialScope : DEFAULT_SCOPE);
+        disabledForCurrentProjectCheckBox = new JCheckBox(RunItBundle.message("dialog.edit.disable_current_project"));
+        disabledForCurrentProjectCheckBox.setSelected(disabledProjectKeys.contains(currentProjectKey));
         iconCategoryCombo = new JComboBox<>(RunItIcons.IconCategory.values());
         iconCategoryCombo.setRenderer(new IconCategoryRenderer());
         iconCombo = new JComboBox<>();
@@ -49,23 +60,31 @@ public class EditActionDialog extends DialogWrapper {
         commandArea.setLineWrap(true);
         commandArea.setWrapStyleWord(true);
         configHint = createConfigHint();
-        scopeCombo.addActionListener(e -> updateConfigHint());
+        scopeCombo.addActionListener(e -> updateScopeState());
         iconCategoryCombo.addActionListener(e -> updateIconOptions());
 
         init();
-        updateConfigHint();
+        updateScopeState();
     }
 
     @Override
     protected @Nullable JComponent createCenterPanel() {
         JPanel panel = FormBuilder.createFormBuilder()
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.name"), nameField)
-                .addLabeledComponent(RunItBundle.message("dialog.edit.label.scope"), scopeCombo)
+                .addLabeledComponent(RunItBundle.message("dialog.edit.label.scope"), createScopeSelector())
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.icon"), createIconSelector())
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.command"), JBUI.Panels.simplePanel(new JScrollPane(commandArea)))
                 .addComponent(configHint)
                 .getPanel();
         panel.setMinimumSize(new Dimension(450, 250));
+        return panel;
+    }
+
+    private JComponent createScopeSelector() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUIScale.scale(8), 0));
+        panel.setOpaque(false);
+        panel.add(scopeCombo);
+        panel.add(disabledForCurrentProjectCheckBox);
         return panel;
     }
 
@@ -101,6 +120,13 @@ public class EditActionDialog extends DialogWrapper {
         String path = RunItConfigPaths.getDisplayPath(project, scope);
         configHint.setText(RunItBundle.message("dialog.edit.hint", scope.getDisplayName(), path));
         configHint.setToolTipText(path);
+    }
+
+    private void updateScopeState() {
+        boolean globalScope = getSelectedScope() == ActionScope.GLOBAL;
+        disabledForCurrentProjectCheckBox.setVisible(globalScope);
+        disabledForCurrentProjectCheckBox.setEnabled(globalScope);
+        updateConfigHint();
     }
 
     private void initializeIconSelection(String iconKey) {
@@ -188,11 +214,26 @@ public class EditActionDialog extends DialogWrapper {
 
     public ActionConfig getActionConfig() {
         IconItem selected = (IconItem) iconCombo.getSelectedItem();
-        return new ActionConfig(
+        ActionConfig action = new ActionConfig(
                 nameField.getText().trim(),
                 selected != null ? selected.key : "run",
                 commandArea.getText()
         );
+        ActionScope selectedScope = getSelectedScope();
+        action.scope = selectedScope.name();
+        if (selectedScope == ActionScope.GLOBAL) {
+            action.disabledProjectKeys = getUpdatedDisabledProjectKeys();
+        }
+        return action;
+    }
+
+    private List<String> getUpdatedDisabledProjectKeys() {
+        List<String> updatedProjectKeys = new ArrayList<>(disabledProjectKeys);
+        updatedProjectKeys.remove(currentProjectKey);
+        if (disabledForCurrentProjectCheckBox.isSelected()) {
+            updatedProjectKeys.add(currentProjectKey);
+        }
+        return updatedProjectKeys;
     }
 
     public ActionScope getSelectedScope() {

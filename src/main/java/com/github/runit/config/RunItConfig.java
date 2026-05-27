@@ -18,6 +18,20 @@ public class RunItConfig {
             sb.append("id = \"").append(escape(action.id)).append("\"\n");
             sb.append("name = \"").append(escape(action.name)).append("\"\n");
             sb.append("icon = \"").append(escape(action.icon)).append("\"\n");
+            sb.append("scope = \"").append(escape(action.scope)).append("\"\n");
+            if (action.projectKey != null && !action.projectKey.isBlank()) {
+                sb.append("projectKey = \"").append(escape(action.projectKey)).append("\"\n");
+            }
+            if (action.disabledProjectKeys != null && !action.disabledProjectKeys.isEmpty()) {
+                sb.append("disabledProjectKeys = [");
+                for (int i = 0; i < action.disabledProjectKeys.size(); i++) {
+                    if (i > 0) {
+                        sb.append(", ");
+                    }
+                    sb.append("\"").append(escape(action.disabledProjectKeys.get(i))).append("\"");
+                }
+                sb.append("]\n");
+            }
             if (canUseLiteralString(action.command)) {
                 sb.append("command = '").append(action.command).append("'\n\n");
             } else if (canUseMultilineLiteralString(action.command)) {

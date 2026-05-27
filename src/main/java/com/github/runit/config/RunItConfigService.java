@@ -31,7 +31,6 @@ public class RunItConfigService implements Disposable {
     private static final Logger LOG = Logger.getInstance(RunItConfigService.class);
 
     private final Project project;
-    private volatile RunItConfig projectConfig;
     private volatile RunItConfig globalConfig;
     private volatile RunItActionOrderConfig actionOrderConfig;
     private final Object configLock = new Object();
@@ -47,27 +46,19 @@ public class RunItConfigService implements Disposable {
     }
 
     private void ensureConfigLoaded() {
-        if (projectConfig != null && globalConfig != null && actionOrderConfig != null) {
+        if (globalConfig != null && actionOrderConfig != null) {
             return;
         }
         synchronized (configLock) {
-            if (projectConfig == null) {
-                projectConfig = loadConfigInternal(ActionScope.PROJECT);
-            }
             if (globalConfig == null) {
                 globalConfig = loadConfigInternal(ActionScope.GLOBAL);
             }
-            boolean projectDirty = normalizeActionIds(projectConfig, new LinkedHashSet<>());
             Set<String> usedIds = new LinkedHashSet<>();
-            collectActionIds(projectConfig, usedIds);
-            boolean globalDirty = normalizeActionIds(globalConfig, usedIds);
+            boolean globalDirty = normalizeActions(globalConfig, usedIds);
             if (actionOrderConfig == null) {
                 actionOrderConfig = loadActionOrderConfigInternal();
             }
             syncActionOrder(false);
-            if (projectDirty) {
-                saveConfig(ActionScope.PROJECT);
-            }
             if (globalDirty) {
                 saveConfig(ActionScope.GLOBAL);
             }
@@ -112,11 +103,16 @@ public class RunItConfigService implements Disposable {
 
     private void reloadConfig(ActionScope scope) {
         synchronized (configLock) {
-            if (scope == ActionScope.PROJECT) {
-                projectConfig = loadConfigInternal(ActionScope.PROJECT);
-            } else {
-                globalConfig = loadConfigInternal(ActionScope.GLOBAL);
-            }
+            globalConfig = loadConfigInternal(ActionScope.GLOBAL);
+            normalizeAllActionIds();
+            syncActionOrder(false);
+        }
+    }
+
+    public void reloadAll() {
+        synchronized (configLock) {
+            globalConfig = loadConfigInternal(ActionScope.GLOBAL);
+            actionOrderConfig = loadActionOrderConfigInternal();
             normalizeAllActionIds();
             syncActionOrder(false);
         }
@@ -154,99 +150,138 @@ public class RunItConfigService implements Disposable {
     }
 
     public List<ScopedAction> getScopedActions() {
+        return getScopedActions(ActionListFilter.PROJECT_RELATED);
+    }
+
+    public List<ScopedAction> getScopedActions(ActionListFilter filter) {
         ensureConfigLoaded();
-        return applyActionOrder(buildCombinedActions());
+        return applyActionOrder(buildFilteredActions(filter));
     }
 
     public List<ScopedAction> getScopedActions(ActionScope scope) {
         ensureConfigLoaded();
         List<ScopedAction> actions = new ArrayList<>();
-        appendScopedActions(actions, scope, getConfig(scope));
+        appendScopedActions(actions, scope, globalConfig, ActionListFilter.ALL);
         return actions;
     }
 
     public void addAction(ActionScope scope, ActionConfig action) {
         ensureConfigLoaded();
         action.id = generateActionId();
-        getConfig(scope).actions.add(action);
-        saveConfig(scope);
+        applyScopeDefaults(action, scope);
+        globalConfig.actions.add(action);
+        saveConfig(ActionScope.GLOBAL);
         syncActionOrder(true);
     }
 
     public void updateAction(ActionScope sourceScope, int sourceIndex, ActionScope targetScope, ActionConfig action) {
         ensureConfigLoaded();
-        RunItConfig sourceConfig = getConfig(sourceScope);
-        if (sourceIndex < 0 || sourceIndex >= sourceConfig.actions.size()) {
+        if (sourceIndex < 0 || sourceIndex >= globalConfig.actions.size()) {
             return;
         }
 
-        ActionConfig existingAction = sourceConfig.actions.get(sourceIndex);
+        ActionConfig existingAction = globalConfig.actions.get(sourceIndex);
         action.id = existingAction.id;
+        applyScopeDefaults(action, targetScope);
 
-        if (sourceScope == targetScope) {
-            sourceConfig.actions.set(sourceIndex, action);
-            saveConfig(sourceScope);
-            syncActionOrder(true);
-            return;
-        }
-
-        sourceConfig.actions.remove(sourceIndex);
-        getConfig(targetScope).actions.add(action);
-        saveConfig(sourceScope);
-        saveConfig(targetScope);
+        globalConfig.actions.set(sourceIndex, action);
+        saveConfig(ActionScope.GLOBAL);
         syncActionOrder(true);
     }
 
     public void removeAction(ActionScope scope, int index) {
         ensureConfigLoaded();
-        RunItConfig config = getConfig(scope);
-        if (index >= 0 && index < config.actions.size()) {
-            config.actions.remove(index);
-            saveConfig(scope);
+        if (index >= 0 && index < globalConfig.actions.size()) {
+            globalConfig.actions.remove(index);
+            saveConfig(ActionScope.GLOBAL);
             syncActionOrder(true);
         }
     }
 
     public void moveAction(ActionScope scope, int fromIndex, int toIndex) {
         ensureConfigLoaded();
-        RunItConfig config = getConfig(scope);
-        int actionCount = config.actions.size();
+        int actionCount = globalConfig.actions.size();
         if (fromIndex < 0 || fromIndex >= actionCount || toIndex < 0 || toIndex >= actionCount || fromIndex == toIndex) {
             return;
         }
 
-        ActionConfig action = config.actions.remove(fromIndex);
-        config.actions.add(toIndex, action);
-        saveConfig(scope);
+        ActionConfig action = globalConfig.actions.remove(fromIndex);
+        globalConfig.actions.add(toIndex, action);
+        saveConfig(ActionScope.GLOBAL);
     }
 
     public void moveAction(int fromIndex, int toIndex) {
+        moveAction(ActionListFilter.PROJECT_RELATED, fromIndex, toIndex);
+    }
+
+    public void moveAction(ActionListFilter filter, int fromIndex, int toIndex) {
         ensureConfigLoaded();
-        List<String> orderedIds = resolveActionOrder(buildCombinedActions());
-        int actionCount = orderedIds.size();
+        List<String> visibleOrderedIds = resolveActionOrder(buildFilteredActions(filter));
+        int actionCount = visibleOrderedIds.size();
         if (fromIndex < 0 || fromIndex >= actionCount || toIndex < 0 || toIndex >= actionCount || fromIndex == toIndex) {
             return;
         }
 
-        String actionId = orderedIds.remove(fromIndex);
-        orderedIds.add(toIndex, actionId);
-        saveActionOrder(orderedIds);
+        String actionId = visibleOrderedIds.remove(fromIndex);
+        visibleOrderedIds.add(toIndex, actionId);
+        saveActionOrder(mergeVisibleOrder(resolveActionOrder(buildFilteredActions(ActionListFilter.ALL)), visibleOrderedIds));
     }
 
     private RunItConfig getConfig(ActionScope scope) {
-        return scope == ActionScope.GLOBAL ? globalConfig : projectConfig;
+        return globalConfig;
     }
 
-    private List<ScopedAction> buildCombinedActions() {
+    private void applyScopeDefaults(ActionConfig action, ActionScope scope) {
+        ActionScope targetScope = scope != null ? scope : ActionScope.GLOBAL;
+        action.scope = targetScope.name();
+        if (action.disabledProjectKeys == null) {
+            action.disabledProjectKeys = new ArrayList<>();
+        }
+        if (targetScope == ActionScope.PROJECT) {
+            action.projectKey = getProjectOrderKey();
+            action.disabledProjectKeys.clear();
+        } else {
+            action.projectKey = "";
+        }
+    }
+
+    private ActionScope getActionScope(ActionConfig action) {
+        if (ActionScope.PROJECT.name().equalsIgnoreCase(action.scope)) {
+            return ActionScope.PROJECT;
+        }
+        return ActionScope.GLOBAL;
+    }
+
+    private boolean isEnabledForCurrentProject(ActionConfig action) {
+        ActionScope scope = getActionScope(action);
+        String projectKey = getProjectOrderKey();
+        if (scope == ActionScope.PROJECT) {
+            return projectKey.equals(trimToNull(action.projectKey));
+        }
+        return action.disabledProjectKeys == null || !action.disabledProjectKeys.contains(projectKey);
+    }
+
+    private List<ScopedAction> buildFilteredActions(ActionListFilter filter) {
         List<ScopedAction> actions = new ArrayList<>();
-        appendScopedActions(actions, ActionScope.PROJECT, projectConfig);
-        appendScopedActions(actions, ActionScope.GLOBAL, globalConfig);
+        appendScopedActions(actions, null, globalConfig, filter);
         return actions;
     }
 
-    private void appendScopedActions(List<ScopedAction> target, ActionScope scope, RunItConfig config) {
+    private void appendScopedActions(List<ScopedAction> target, ActionScope scopeFilter, RunItConfig config, ActionListFilter filter) {
         for (int i = 0; i < config.actions.size(); i++) {
-            target.add(new ScopedAction(config.actions.get(i), scope, i));
+            ActionConfig action = config.actions.get(i);
+            ActionScope scope = getActionScope(action);
+            if (scopeFilter != null && scope != scopeFilter) {
+                continue;
+            }
+            boolean enabled = isEnabledForCurrentProject(action);
+            if (filter == ActionListFilter.PROJECT_RELATED && !enabled) {
+                continue;
+            }
+            if (filter == ActionListFilter.PROJECT_UNRELATED && enabled) {
+                continue;
+            }
+            target.add(new ScopedAction(action, scope, i, enabled));
         }
     }
 
@@ -291,8 +326,23 @@ public class RunItConfigService implements Disposable {
         return resolvedOrder;
     }
 
+    private List<String> mergeVisibleOrder(List<String> allOrderedIds, List<String> visibleOrderedIds) {
+        Set<String> visibleIds = new LinkedHashSet<>(visibleOrderedIds);
+        List<String> mergedIds = new ArrayList<>();
+        int visibleIndex = 0;
+        for (String actionId : allOrderedIds) {
+            if (visibleIds.contains(actionId)) {
+                mergedIds.add(visibleOrderedIds.get(visibleIndex));
+                visibleIndex++;
+            } else {
+                mergedIds.add(actionId);
+            }
+        }
+        return mergedIds;
+    }
+
     private void syncActionOrder(boolean saveIfChanged) {
-        List<String> resolvedOrder = resolveActionOrder(buildCombinedActions());
+        List<String> resolvedOrder = resolveActionOrder(buildFilteredActions(ActionListFilter.ALL));
         List<String> currentOrder = actionOrderConfig.getActionOrder(getProjectOrderKey());
         if (!Objects.equals(resolvedOrder, currentOrder)) {
             actionOrderConfig.setActionOrder(getProjectOrderKey(), resolvedOrder);
@@ -326,18 +376,14 @@ public class RunItConfigService implements Disposable {
 
     private boolean normalizeAllActionIds() {
         Set<String> usedIds = new LinkedHashSet<>();
-        boolean projectDirty = normalizeActionIds(projectConfig, usedIds);
-        boolean globalDirty = normalizeActionIds(globalConfig, usedIds);
-        if (projectDirty) {
-            saveConfig(ActionScope.PROJECT);
-        }
+        boolean globalDirty = normalizeActions(globalConfig, usedIds);
         if (globalDirty) {
             saveConfig(ActionScope.GLOBAL);
         }
-        return projectDirty || globalDirty;
+        return globalDirty;
     }
 
-    private boolean normalizeActionIds(RunItConfig config, Set<String> usedIds) {
+    private boolean normalizeActions(RunItConfig config, Set<String> usedIds) {
         boolean changed = false;
         for (ActionConfig action : config.actions) {
             String normalizedId = trimToNull(action.id);
@@ -347,29 +393,29 @@ public class RunItConfigService implements Disposable {
             }
             action.id = normalizedId;
             usedIds.add(normalizedId);
+            ActionScope scope = getActionScope(action);
+            if (!scope.name().equals(action.scope)) {
+                action.scope = scope.name();
+                changed = true;
+            }
+            if (action.disabledProjectKeys == null) {
+                action.disabledProjectKeys = new ArrayList<>();
+                changed = true;
+            }
+            if (scope == ActionScope.GLOBAL && trimToNull(action.projectKey) != null) {
+                action.projectKey = "";
+                changed = true;
+            }
+            if (scope == ActionScope.PROJECT && trimToNull(action.projectKey) == null) {
+                action.projectKey = getProjectOrderKey();
+                changed = true;
+            }
         }
         return changed;
     }
 
-    private void collectActionIds(RunItConfig config, Set<String> usedIds) {
-        for (ActionConfig action : config.actions) {
-            String normalizedId = trimToNull(action.id);
-            if (normalizedId != null) {
-                usedIds.add(normalizedId);
-            }
-        }
-    }
-
     private String getProjectOrderKey() {
-        String basePath = project.getBasePath();
-        if (basePath != null) {
-            String canonicalPath = FileUtil.toCanonicalPath(basePath);
-            if (canonicalPath != null) {
-                return FileUtil.toSystemIndependentName(canonicalPath);
-            }
-            return FileUtil.toSystemIndependentName(basePath);
-        }
-        return "workspace:" + project.getLocationHash();
+        return RunItConfigPaths.getProjectKey(project);
     }
 
     private String generateActionId() {

@@ -1,5 +1,7 @@
 package com.github.runit.config;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 public class ActionConfig {
@@ -7,6 +9,9 @@ public class ActionConfig {
     public String name = "";
     public String icon = "run";
     public String command = "";
+    public String scope = ActionScope.GLOBAL.name();
+    public String projectKey = "";
+    public List<String> disabledProjectKeys = new ArrayList<>();
 
     public ActionConfig() {
     }
@@ -30,11 +35,14 @@ public class ActionConfig {
         return Objects.equals(id, that.id)
                 && Objects.equals(name, that.name)
                 && Objects.equals(icon, that.icon)
-                && Objects.equals(command, that.command);
+                && Objects.equals(command, that.command)
+                && Objects.equals(scope, that.scope)
+                && Objects.equals(projectKey, that.projectKey)
+                && Objects.equals(disabledProjectKeys, that.disabledProjectKeys);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, icon, command);
+        return Objects.hash(id, name, icon, command, scope, projectKey, disabledProjectKeys);
     }
 }

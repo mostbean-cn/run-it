@@ -1,12 +1,12 @@
 package com.github.runit.config;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.openapi.util.io.FileUtil;
 
 import java.io.File;
 import java.util.Locale;
 
 public final class RunItConfigPaths {
-    private static final String PROJECT_DIR_NAME = ".runit";
     private static final String GLOBAL_DIR_NAME = "run-it";
     private static final String CONFIG_FILE_NAME = "runit.toml";
     private static final String ORDER_FILE_NAME = "action-order.toml";
@@ -15,22 +15,27 @@ public final class RunItConfigPaths {
     }
 
     public static File getConfigFile(Project project, ActionScope scope) {
-        return scope == ActionScope.GLOBAL ? getGlobalConfigFile() : getProjectConfigFile(project);
+        return getGlobalConfigFile();
     }
 
     public static String getDisplayPath(Project project, ActionScope scope) {
         return getConfigFile(project, scope).getAbsolutePath();
     }
 
-    public static File getActionOrderFile() {
-        return new File(getGlobalConfigDir(), ORDER_FILE_NAME);
+    public static String getProjectKey(Project project) {
+        String basePath = project.getBasePath();
+        if (basePath != null) {
+            String canonicalPath = FileUtil.toCanonicalPath(basePath);
+            if (canonicalPath != null) {
+                return FileUtil.toSystemIndependentName(canonicalPath);
+            }
+            return FileUtil.toSystemIndependentName(basePath);
+        }
+        return "workspace:" + project.getLocationHash();
     }
 
-    private static File getProjectConfigFile(Project project) {
-        String basePath = project.getBasePath();
-        return basePath != null
-                ? new File(new File(basePath, PROJECT_DIR_NAME), CONFIG_FILE_NAME)
-                : new File(new File(PROJECT_DIR_NAME), CONFIG_FILE_NAME).getAbsoluteFile();
+    public static File getActionOrderFile() {
+        return new File(getGlobalConfigDir(), ORDER_FILE_NAME);
     }
 
     private static File getGlobalConfigFile() {

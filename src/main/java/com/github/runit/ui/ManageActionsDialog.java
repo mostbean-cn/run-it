@@ -1,6 +1,7 @@
 package com.github.runit.ui;
 
 import com.github.runit.config.ActionConfig;
+import com.github.runit.config.ActionListFilter;
 import com.github.runit.config.ActionScope;
 import com.github.runit.config.RunItConfigService;
 import com.github.runit.config.ScopedAction;
@@ -35,6 +36,7 @@ public class ManageActionsDialog extends DialogWrapper {
     private final Project project;
     private final RunItConfigService service;
     private final JPanel listPanel;
+    private final JComboBox<ActionListFilter> filterCombo;
     private JBLabel titleLabel;
     private int dragSourceIndex = -1;
     private int dragTargetIndex = -1;
@@ -45,6 +47,9 @@ public class ManageActionsDialog extends DialogWrapper {
         this.service = service;
         setTitle(RunItBundle.message("dialog.manage.title"));
         setSize(800, 600);
+        filterCombo = new JComboBox<>(ActionListFilter.values());
+        filterCombo.setSelectedItem(ActionListFilter.PROJECT_RELATED);
+        filterCombo.addActionListener(e -> refreshList());
         listPanel = new JPanel();
         listPanel.setLayout(new BoxLayout(listPanel, BoxLayout.Y_AXIS));
         listPanel.setBackground(PANEL_BACKGROUND);
@@ -54,7 +59,7 @@ public class ManageActionsDialog extends DialogWrapper {
 
     private void refreshList() {
         listPanel.removeAll();
-        List<ScopedAction> actions = service.getScopedActions();
+        List<ScopedAction> actions = service.getScopedActions(getSelectedFilter());
         int actionCount = actions.size();
         if (titleLabel != null) {
             titleLabel.setText(RunItBundle.message("dialog.manage.header", actionCount));
@@ -71,6 +76,11 @@ public class ManageActionsDialog extends DialogWrapper {
         listPanel.repaint();
     }
 
+    private ActionListFilter getSelectedFilter() {
+        ActionListFilter filter = (ActionListFilter) filterCombo.getSelectedItem();
+        return filter != null ? filter : ActionListFilter.PROJECT_RELATED;
+    }
+
     @Override
     protected @Nullable JComponent createCenterPanel() {
         JPanel panel = new JPanel(new BorderLayout());
@@ -81,10 +91,21 @@ public class ManageActionsDialog extends DialogWrapper {
         JPanel header = new JPanel(new BorderLayout(12, 0));
         header.setOpaque(false);
         header.setBorder(JBUI.Borders.empty(16, 20, 12, 20));
+
+        JPanel leftHeader = new JPanel(new BorderLayout(0, 8));
+        leftHeader.setOpaque(false);
         titleLabel = new JBLabel();
         titleLabel.setFont(titleLabel.getFont().deriveFont(Font.BOLD, 16f));
-        header.add(titleLabel, BorderLayout.WEST);
-        header.add(createAddButton(), BorderLayout.EAST);
+        leftHeader.add(titleLabel, BorderLayout.NORTH);
+        leftHeader.add(createFilterPanel(), BorderLayout.SOUTH);
+
+        JPanel actionsPanel = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        actionsPanel.setOpaque(false);
+        actionsPanel.add(createRefreshButton());
+        actionsPanel.add(createAddButton());
+
+        header.add(leftHeader, BorderLayout.WEST);
+        header.add(actionsPanel, BorderLayout.EAST);
         panel.add(header, BorderLayout.NORTH);
 
         JBScrollPane scrollPane = new JBScrollPane(listPanel);
@@ -111,6 +132,27 @@ public class ManageActionsDialog extends DialogWrapper {
         addButton.setFocusPainted(false);
         addButton.addActionListener(e -> addAction());
         return addButton;
+    }
+
+    private JButton createRefreshButton() {
+        JButton refreshButton = new JButton(RunItBundle.message("dialog.manage.refresh"), com.intellij.icons.AllIcons.Actions.Refresh);
+        refreshButton.setFocusPainted(false);
+        refreshButton.addActionListener(e -> {
+            service.reloadAll();
+            refreshList();
+        });
+        return refreshButton;
+    }
+
+    private JComponent createFilterPanel() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        panel.setOpaque(false);
+        JBLabel label = new JBLabel(RunItBundle.message("dialog.manage.filter.scope"));
+        label.setBorder(JBUI.Borders.emptyRight(8));
+        filterCombo.setPreferredSize(new Dimension(JBUIScale.scale(140), filterCombo.getPreferredSize().height));
+        panel.add(label);
+        panel.add(filterCombo);
+        return panel;
     }
 
     private JComponent createEmptyState() {
@@ -297,7 +339,7 @@ public class ManageActionsDialog extends DialogWrapper {
                 public void mouseReleased(MouseEvent e) {
                     int targetIndex = findDropTargetIndex(SwingUtilities.convertPoint(dragHandle, e.getPoint(), listPanel));
                     if (dragSourceIndex >= 0 && targetIndex >= 0 && targetIndex != dragSourceIndex) {
-                        service.moveAction(dragSourceIndex, targetIndex);
+                        service.moveAction(getSelectedFilter(), dragSourceIndex, targetIndex);
                     }
                     dragSourceIndex = -1;
                     dragTargetIndex = -1;
@@ -329,7 +371,11 @@ public class ManageActionsDialog extends DialogWrapper {
             nameRow.setOpaque(false);
             nameRow.add(nameLabel);
             nameRow.add(Box.createHorizontalStrut(8));
-            nameRow.add(createScopeTag(scope));
+            nameRow.add(createScopeTag(scope, actionConfig));
+            if (!scopedAction.isEnabledForCurrentProject()) {
+                nameRow.add(Box.createHorizontalStrut(8));
+                nameRow.add(createDisabledTag());
+            }
 
             textPanel.add(nameRow, BorderLayout.NORTH);
             textPanel.add(commandLabel, BorderLayout.CENTER);
@@ -374,7 +420,7 @@ public class ManageActionsDialog extends DialogWrapper {
         }
     }
 
-    private JComponent createScopeTag(ActionScope scope) {
+    private JComponent createScopeTag(ActionScope scope, ActionConfig actionConfig) {
         JLabel label = new JLabel(scope.getDisplayName());
         label.setOpaque(true);
         label.setBackground(scope == ActionScope.PROJECT
@@ -383,6 +429,18 @@ public class ManageActionsDialog extends DialogWrapper {
         label.setForeground(scope == ActionScope.PROJECT
                 ? new JBColor(new Color(0x1F3A5B), Color.WHITE)
                 : new JBColor(new Color(0x5A3A12), Color.WHITE));
+        if (scope == ActionScope.PROJECT && actionConfig.projectKey != null && !actionConfig.projectKey.isBlank()) {
+            label.setToolTipText(actionConfig.projectKey);
+        }
+        label.setBorder(JBUI.Borders.empty(3, 8));
+        return label;
+    }
+
+    private JComponent createDisabledTag() {
+        JLabel label = new JLabel(RunItBundle.message("dialog.manage.tag.disabled_current_project"));
+        label.setOpaque(true);
+        label.setBackground(new JBColor(new Color(0xF2D9D9), new Color(0x5A2E2E)));
+        label.setForeground(new JBColor(new Color(0x7A2020), Color.WHITE));
         label.setBorder(JBUI.Borders.empty(3, 8));
         return label;
     }
