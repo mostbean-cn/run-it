@@ -24,7 +24,7 @@ import java.util.List;
 
 public class EditActionDialog extends DialogWrapper {
     private static final ActionScope DEFAULT_SCOPE = ActionScope.GLOBAL;
-    private static final int ICON_CATEGORY_WIDTH = 76;
+    private static final int COMPACT_COMBO_WIDTH = 88;
     private static final int ICON_SELECTOR_WIDTH = 176;
     private final Project project;
     private final JBTextField nameField;
@@ -83,6 +83,7 @@ public class EditActionDialog extends DialogWrapper {
     private JComponent createScopeSelector() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUIScale.scale(8), 0));
         panel.setOpaque(false);
+        setFixedComboWidth(scopeCombo, COMPACT_COMBO_WIDTH);
         panel.add(scopeCombo);
         panel.add(disabledForCurrentProjectCheckBox);
         return panel;
@@ -91,11 +92,7 @@ public class EditActionDialog extends DialogWrapper {
     private JComponent createIconSelector() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUIScale.scale(8), 0));
         panel.setOpaque(false);
-        Dimension categorySize = iconCategoryCombo.getPreferredSize();
-        categorySize.width = JBUIScale.scale(ICON_CATEGORY_WIDTH);
-        iconCategoryCombo.setMinimumSize(categorySize);
-        iconCategoryCombo.setPreferredSize(categorySize);
-        iconCategoryCombo.setMaximumSize(categorySize);
+        setFixedComboWidth(iconCategoryCombo, COMPACT_COMBO_WIDTH);
 
         Dimension iconSize = iconCombo.getPreferredSize();
         iconSize.width = JBUIScale.scale(ICON_SELECTOR_WIDTH);
@@ -106,6 +103,14 @@ public class EditActionDialog extends DialogWrapper {
         panel.add(iconCategoryCombo);
         panel.add(iconCombo);
         return panel;
+    }
+
+    private static void setFixedComboWidth(JComboBox<?> comboBox, int width) {
+        Dimension size = comboBox.getPreferredSize();
+        size.width = JBUIScale.scale(width);
+        comboBox.setMinimumSize(size);
+        comboBox.setPreferredSize(size);
+        comboBox.setMaximumSize(size);
     }
 
     private JBLabel createConfigHint() {
