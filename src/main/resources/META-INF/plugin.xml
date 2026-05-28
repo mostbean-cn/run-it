@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.github.runit</id>
     <name>RunIt</name>
-    <version>0.1.3</version>
+    <version>0.1.4</version>
     <vendor>mostbean</vendor>
 
     <description><![CDATA[
@@ -13,6 +13,15 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <p><strong>0.1.4</strong></p>
+        <ul>
+            <li>优化工具栏下拉菜单，隐藏标题栏，移除“添加操作”入口，并保持“管理操作”常驻显示。</li>
+            <li>在添加与编辑操作弹窗中新增“打开目录”按钮，可直接定位到配置文件所在位置。</li>
+            <li>修复命令保存时 TOML 字符串转义不完整的问题，统一处理 Windows 路径、引号、换行与控制字符，避免配置文件被写坏。</li>
+            <li>优化损坏配置的容错加载：单个操作配置损坏时，其他操作仍可正常显示，并在管理列表中为损坏项显示标签。</li>
+            <li>保存包含损坏项的配置前会备份原始配置文件，降低手动修复配置时的数据丢失风险。</li>
+        </ul>
+
         <p><strong>0.1.3</strong></p>
         <ul>
             <li>新增图标分组，添加AI相关图标。</li>
