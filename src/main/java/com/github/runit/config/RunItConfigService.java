@@ -18,6 +18,7 @@ import org.jetbrains.annotations.NotNull;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -32,6 +33,7 @@ public class RunItConfigService implements Disposable {
 
     private final Project project;
     private volatile RunItConfig globalConfig;
+    private volatile boolean globalConfigLoadedPartially;
     private volatile RunItActionOrderConfig actionOrderConfig;
     private final Object configLock = new Object();
 
@@ -51,7 +53,9 @@ public class RunItConfigService implements Disposable {
         }
         synchronized (configLock) {
             if (globalConfig == null) {
-                globalConfig = loadConfigInternal(ActionScope.GLOBAL);
+                LoadConfigResult result = loadConfigInternal(ActionScope.GLOBAL);
+                globalConfig = result.config();
+                globalConfigLoadedPartially = result.partial();
             }
             Set<String> usedIds = new LinkedHashSet<>();
             boolean globalDirty = normalizeActions(globalConfig, usedIds);
@@ -59,31 +63,101 @@ public class RunItConfigService implements Disposable {
                 actionOrderConfig = loadActionOrderConfigInternal();
             }
             syncActionOrder(false);
-            if (globalDirty) {
+            if (globalDirty && !globalConfigLoadedPartially) {
                 saveConfig(ActionScope.GLOBAL);
             }
         }
     }
 
-    private RunItConfig loadConfigInternal(ActionScope scope) {
+    private LoadConfigResult loadConfigInternal(ActionScope scope) {
         File file = RunItConfigPaths.getConfigFile(project, scope);
         if (file.exists()) {
             try {
-                Toml toml = new Toml().read(file);
-                RunItConfig loaded = toml.to(RunItConfig.class);
-                if (loaded == null) {
-                    loaded = new RunItConfig();
-                }
-                if (loaded.actions == null) {
-                    loaded.actions = new ArrayList<>();
-                }
-                return loaded;
+                return new LoadConfigResult(readConfig(file), false);
             } catch (Exception e) {
                 LOG.warn("Failed to load RunIt config from " + file.getAbsolutePath(), e);
+                PartialConfigLoadResult partialResult = loadConfigPartially(file);
+                if (!partialResult.config().actions.isEmpty()) {
+                    showConfigPartialLoadNotification(file, scope, e, partialResult.loadedCount(), partialResult.skippedCount());
+                    return new LoadConfigResult(partialResult.config(), true);
+                }
                 showConfigLoadErrorNotification(file, scope, e);
             }
         }
-        return new RunItConfig();
+        return new LoadConfigResult(new RunItConfig(), false);
+    }
+
+    private RunItConfig readConfig(File file) {
+        Toml toml = new Toml().read(file);
+        RunItConfig loaded = toml.to(RunItConfig.class);
+        if (loaded == null) {
+            loaded = new RunItConfig();
+        }
+        if (loaded.actions == null) {
+            loaded.actions = new ArrayList<>();
+        }
+        return loaded;
+    }
+
+    private PartialConfigLoadResult loadConfigPartially(File file) {
+        RunItConfig config = new RunItConfig();
+        List<String> actionBlocks;
+        try {
+            actionBlocks = extractActionBlocks(java.nio.file.Files.readString(file.toPath(), StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            LOG.warn("Failed to read RunIt config for partial load from " + file.getAbsolutePath(), e);
+            return new PartialConfigLoadResult(config, 0, 0);
+        }
+
+        int loadedCount = 0;
+        int skippedCount = 0;
+        for (String actionBlock : actionBlocks) {
+            try {
+                RunItConfig blockConfig = readConfigFragment(actionBlock);
+                if (blockConfig.actions.isEmpty()) {
+                    skippedCount++;
+                    continue;
+                }
+                config.actions.addAll(blockConfig.actions);
+                loadedCount += blockConfig.actions.size();
+            } catch (Exception e) {
+                skippedCount++;
+                LOG.warn("Skipped invalid RunIt action block from " + file.getAbsolutePath(), e);
+            }
+        }
+        return new PartialConfigLoadResult(config, loadedCount, skippedCount);
+    }
+
+    private RunItConfig readConfigFragment(String actionBlock) {
+        Toml toml = new Toml().read("version = 1\n\n" + actionBlock);
+        RunItConfig loaded = toml.to(RunItConfig.class);
+        if (loaded == null) {
+            loaded = new RunItConfig();
+        }
+        if (loaded.actions == null) {
+            loaded.actions = new ArrayList<>();
+        }
+        return loaded;
+    }
+
+    private List<String> extractActionBlocks(String content) {
+        List<String> blocks = new ArrayList<>();
+        StringBuilder currentBlock = null;
+        for (String line : content.split("\\R", -1)) {
+            if ("[[actions]]".equals(line.trim())) {
+                if (currentBlock != null) {
+                    blocks.add(currentBlock.toString());
+                }
+                currentBlock = new StringBuilder();
+            }
+            if (currentBlock != null) {
+                currentBlock.append(line).append('\n');
+            }
+        }
+        if (currentBlock != null) {
+            blocks.add(currentBlock.toString());
+        }
+        return blocks;
     }
 
     private void showConfigLoadErrorNotification(File file, ActionScope scope, Exception e) {
@@ -101,9 +175,36 @@ public class RunItConfigService implements Disposable {
         });
     }
 
+    private void showConfigPartialLoadNotification(File file, ActionScope scope, Exception e, int loadedCount, int skippedCount) {
+        String scopeName = scope == ActionScope.GLOBAL
+                ? RunItBundle.message("scope.global")
+                : RunItBundle.message("scope.project");
+        String title = RunItBundle.message("notification.config.partial_load.title");
+        String content = RunItBundle.message(
+                "notification.config.partial_load.content",
+                scopeName,
+                loadedCount,
+                skippedCount,
+                e.getMessage(),
+                file.getAbsolutePath()
+        );
+
+        ApplicationManager.getApplication().invokeLater(() -> {
+            com.intellij.notification.NotificationGroupManager.getInstance()
+                    .getNotificationGroup("RunIt")
+                    .createNotification(title, content, com.intellij.notification.NotificationType.WARNING)
+                    .notify(project);
+        });
+    }
+
     private void reloadConfig(ActionScope scope) {
         synchronized (configLock) {
-            globalConfig = loadConfigInternal(ActionScope.GLOBAL);
+            LoadConfigResult result = loadConfigInternal(ActionScope.GLOBAL);
+            globalConfig = result.config();
+            globalConfigLoadedPartially = result.partial();
+            if (actionOrderConfig == null) {
+                actionOrderConfig = loadActionOrderConfigInternal();
+            }
             normalizeAllActionIds();
             syncActionOrder(false);
         }
@@ -111,7 +212,9 @@ public class RunItConfigService implements Disposable {
 
     public void reloadAll() {
         synchronized (configLock) {
-            globalConfig = loadConfigInternal(ActionScope.GLOBAL);
+            LoadConfigResult result = loadConfigInternal(ActionScope.GLOBAL);
+            globalConfig = result.config();
+            globalConfigLoadedPartially = result.partial();
             actionOrderConfig = loadActionOrderConfigInternal();
             normalizeAllActionIds();
             syncActionOrder(false);
@@ -137,7 +240,11 @@ public class RunItConfigService implements Disposable {
                     if (!dir.exists()) {
                         dir.mkdirs();
                     }
+                    backupPartiallyLoadedConfig(scope, file);
                     java.nio.file.Files.write(file.toPath(), config.toToml().getBytes(StandardCharsets.UTF_8));
+                    if (scope == ActionScope.GLOBAL) {
+                        globalConfigLoadedPartially = false;
+                    }
                     VirtualFile virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
                     if (virtualFile != null) {
                         virtualFile.refresh(false, false);
@@ -147,6 +254,13 @@ public class RunItConfigService implements Disposable {
                 }
             });
         });
+    }
+
+    private void backupPartiallyLoadedConfig(ActionScope scope, File file) throws IOException {
+        if (scope != ActionScope.GLOBAL || !globalConfigLoadedPartially || !file.exists()) {
+            return;
+        }
+        java.nio.file.Files.copy(file.toPath(), new File(file.getAbsolutePath() + ".bak").toPath(), StandardCopyOption.REPLACE_EXISTING);
     }
 
     public List<ScopedAction> getScopedActions() {
@@ -377,7 +491,7 @@ public class RunItConfigService implements Disposable {
     private boolean normalizeAllActionIds() {
         Set<String> usedIds = new LinkedHashSet<>();
         boolean globalDirty = normalizeActions(globalConfig, usedIds);
-        if (globalDirty) {
+        if (globalDirty && !globalConfigLoadedPartially) {
             saveConfig(ActionScope.GLOBAL);
         }
         return globalDirty;
@@ -385,7 +499,28 @@ public class RunItConfigService implements Disposable {
 
     private boolean normalizeActions(RunItConfig config, Set<String> usedIds) {
         boolean changed = false;
-        for (ActionConfig action : config.actions) {
+        for (int i = 0; i < config.actions.size(); i++) {
+            ActionConfig action = config.actions.get(i);
+            if (action == null) {
+                config.actions.remove(i);
+                i--;
+                changed = true;
+                continue;
+            }
+
+            if (action.name == null) {
+                action.name = "";
+                changed = true;
+            }
+            if (trimToNull(action.icon) == null) {
+                action.icon = "run";
+                changed = true;
+            }
+            if (action.command == null) {
+                action.command = "";
+                changed = true;
+            }
+
             String normalizedId = trimToNull(action.id);
             if (normalizedId == null || usedIds.contains(normalizedId)) {
                 normalizedId = generateActionId();
@@ -464,5 +599,11 @@ public class RunItConfigService implements Disposable {
 
     @Override
     public void dispose() {
+    }
+
+    private record LoadConfigResult(RunItConfig config, boolean partial) {
+    }
+
+    private record PartialConfigLoadResult(RunItConfig config, int loadedCount, int skippedCount) {
     }
 }
