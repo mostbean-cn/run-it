@@ -94,7 +94,24 @@ public class RunItConfigService implements Disposable {
         if (loaded.actions == null) {
             loaded.actions = new ArrayList<>();
         }
+        preserveRawTomlBlocks(file, loaded);
         return loaded;
+    }
+
+    private void preserveRawTomlBlocks(File file, RunItConfig config) {
+        List<String> actionBlocks;
+        try {
+            actionBlocks = extractActionBlocks(java.nio.file.Files.readString(file.toPath(), StandardCharsets.UTF_8));
+        } catch (IOException e) {
+            LOG.warn("Failed to read RunIt config blocks from " + file.getAbsolutePath(), e);
+            return;
+        }
+        if (actionBlocks.size() != config.actions.size()) {
+            return;
+        }
+        for (int i = 0; i < config.actions.size(); i++) {
+            preserveRawTomlBlock(config.actions.get(i), actionBlocks.get(i));
+        }
     }
 
     private PartialConfigLoadResult loadConfigPartially(File file) {
@@ -119,16 +136,60 @@ public class RunItConfigService implements Disposable {
                     blockIndex++;
                     continue;
                 }
+                preserveRawTomlBlock(blockConfig, actionBlock);
                 config.actions.addAll(blockConfig.actions);
                 loadedCount += blockConfig.actions.size();
             } catch (Exception e) {
-                config.actions.add(createDamagedAction(actionBlock, e.getMessage(), blockIndex));
-                damagedCount++;
-                LOG.warn("Skipped invalid RunIt action block from " + file.getAbsolutePath(), e);
+                RunItConfig recoveredConfig = recoverLegacyLiteralCommandBlock(actionBlock);
+                if (recoveredConfig != null && !recoveredConfig.actions.isEmpty()) {
+                    config.actions.addAll(recoveredConfig.actions);
+                    loadedCount += recoveredConfig.actions.size();
+                } else {
+                    config.actions.add(createDamagedAction(actionBlock, e.getMessage(), blockIndex));
+                    damagedCount++;
+                    LOG.warn("Skipped invalid RunIt action block from " + file.getAbsolutePath(), e);
+                }
             }
             blockIndex++;
         }
         return new PartialConfigLoadResult(config, loadedCount, damagedCount);
+    }
+
+    private void preserveRawTomlBlock(RunItConfig config, String actionBlock) {
+        for (ActionConfig action : config.actions) {
+            preserveRawTomlBlock(action, actionBlock);
+        }
+    }
+
+    private void preserveRawTomlBlock(ActionConfig action, String actionBlock) {
+        action.preserveRawTomlBlock = true;
+        action.rawTomlBlock = actionBlock;
+    }
+
+    private RunItConfig recoverLegacyLiteralCommandBlock(String actionBlock) {
+        StringBuilder recoveredBlock = new StringBuilder();
+        boolean changed = false;
+        for (String line : actionBlock.split("\\R", -1)) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("command = '''")) {
+                String prefix = line.substring(0, line.indexOf("'''"));
+                String commandLiteral = line.substring(line.indexOf("'''") + 3);
+                if (!commandLiteral.endsWith("'''") || commandLiteral.endsWith("''''")) {
+                    return null;
+                }
+                String command = commandLiteral.substring(0, commandLiteral.length() - 3);
+                recoveredBlock.append(prefix).append(TomlStringUtil.quote(command)).append('\n');
+                changed = true;
+            } else {
+                recoveredBlock.append(line).append('\n');
+            }
+        }
+        if (!changed) {
+            return null;
+        }
+        RunItConfig recoveredConfig = readConfigFragment(recoveredBlock.toString());
+        preserveRawTomlBlock(recoveredConfig, actionBlock);
+        return recoveredConfig;
     }
 
     private ActionConfig createDamagedAction(String actionBlock, String reason, int blockIndex) {
@@ -444,14 +505,28 @@ public class RunItConfigService implements Disposable {
     }
 
     private void syncActionOrder(boolean saveIfChanged) {
-        List<String> resolvedOrder = resolveActionOrder(buildFilteredActions(ActionListFilter.ALL));
+        List<ScopedAction> currentActions = buildFilteredActions(ActionListFilter.ALL);
+        List<String> resolvedOrder = resolveActionOrder(currentActions);
         List<String> currentOrder = actionOrderConfig.getActionOrder(getProjectOrderKey());
         if (!Objects.equals(resolvedOrder, currentOrder)) {
             actionOrderConfig.setActionOrder(getProjectOrderKey(), resolvedOrder);
-            if (saveIfChanged) {
+            if (saveIfChanged || (!globalConfigLoadedPartially && hasUnknownActionIds(currentOrder, currentActions))) {
                 saveActionOrder(resolvedOrder);
             }
         }
+    }
+
+    private boolean hasUnknownActionIds(List<String> actionIds, List<ScopedAction> currentActions) {
+        Set<String> existingIds = new LinkedHashSet<>();
+        for (ScopedAction action : currentActions) {
+            existingIds.add(action.getActionConfig().id);
+        }
+        for (String actionId : actionIds) {
+            if (!existingIds.contains(actionId)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void saveActionOrder(List<String> actionIds) {

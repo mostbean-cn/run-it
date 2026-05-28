@@ -13,6 +13,7 @@ public class ActionConfig {
     public String projectKey = "";
     public List<String> disabledProjectKeys = new ArrayList<>();
     public transient boolean damaged = false;
+    public transient boolean preserveRawTomlBlock = false;
     public transient String damagedReason = "";
     public transient String rawTomlBlock = "";
 

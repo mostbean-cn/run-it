@@ -14,7 +14,10 @@ public class RunItConfig {
         StringBuilder sb = new StringBuilder();
         sb.append("version = ").append(version).append("\n\n");
         for (ActionConfig action : actions) {
-            if (action != null && action.isDamaged() && action.rawTomlBlock != null && !action.rawTomlBlock.isBlank()) {
+            if (action != null
+                    && (action.isDamaged() || action.preserveRawTomlBlock)
+                    && action.rawTomlBlock != null
+                    && !action.rawTomlBlock.isBlank()) {
                 sb.append(action.rawTomlBlock);
                 if (!action.rawTomlBlock.endsWith("\n")) {
                     sb.append("\n");
