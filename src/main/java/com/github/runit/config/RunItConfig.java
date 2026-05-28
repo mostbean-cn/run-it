@@ -15,12 +15,12 @@ public class RunItConfig {
         sb.append("version = ").append(version).append("\n\n");
         for (ActionConfig action : actions) {
             sb.append("[[actions]]\n");
-            sb.append("id = \"").append(escape(action.id)).append("\"\n");
-            sb.append("name = \"").append(escape(action.name)).append("\"\n");
-            sb.append("icon = \"").append(escape(action.icon)).append("\"\n");
-            sb.append("scope = \"").append(escape(action.scope)).append("\"\n");
+            sb.append("id = ").append(TomlStringUtil.quote(action.id)).append("\n");
+            sb.append("name = ").append(TomlStringUtil.quote(action.name)).append("\n");
+            sb.append("icon = ").append(TomlStringUtil.quote(action.icon)).append("\n");
+            sb.append("scope = ").append(TomlStringUtil.quote(action.scope)).append("\n");
             if (action.projectKey != null && !action.projectKey.isBlank()) {
-                sb.append("projectKey = \"").append(escape(action.projectKey)).append("\"\n");
+                sb.append("projectKey = ").append(TomlStringUtil.quote(action.projectKey)).append("\n");
             }
             if (action.disabledProjectKeys != null && !action.disabledProjectKeys.isEmpty()) {
                 sb.append("disabledProjectKeys = [");
@@ -28,33 +28,12 @@ public class RunItConfig {
                     if (i > 0) {
                         sb.append(", ");
                     }
-                    sb.append("\"").append(escape(action.disabledProjectKeys.get(i))).append("\"");
+                    sb.append(TomlStringUtil.quote(action.disabledProjectKeys.get(i)));
                 }
                 sb.append("]\n");
             }
-            if (canUseLiteralString(action.command)) {
-                sb.append("command = '").append(action.command).append("'\n\n");
-            } else if (canUseMultilineLiteralString(action.command)) {
-                sb.append("command = '''").append(action.command).append("'''\n\n");
-            } else {
-                sb.append("command = \"").append(escape(action.command)).append("\"\n\n");
-            }
+            sb.append("command = ").append(TomlStringUtil.quote(action.command)).append("\n\n");
         }
         return sb.toString();
-    }
-
-    private boolean canUseLiteralString(String s) {
-        if (s == null) return false;
-        return !s.contains("'") && !s.contains("\n") && !s.contains("\r");
-    }
-
-    private boolean canUseMultilineLiteralString(String s) {
-        if (s == null) return false;
-        return !s.contains("'''");
-    }
-
-    private String escape(String s) {
-        if (s == null) return "";
-        return s.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n").replace("\r", "\\r");
     }
 }

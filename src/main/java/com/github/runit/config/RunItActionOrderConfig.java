@@ -67,14 +67,14 @@ public class RunItActionOrderConfig {
         sb.append("version = ").append(VERSION).append("\n\n");
         for (Map.Entry<String, List<String>> entry : ordersByProject.entrySet()) {
             sb.append("[[projects]]\n");
-            sb.append("key = \"").append(escape(entry.getKey())).append("\"\n");
+            sb.append("key = ").append(TomlStringUtil.quote(entry.getKey())).append("\n");
             sb.append("actionIds = [");
             List<String> actionIds = entry.getValue();
             for (int i = 0; i < actionIds.size(); i++) {
                 if (i > 0) {
                     sb.append(", ");
                 }
-                sb.append("\"").append(escape(actionIds.get(i))).append("\"");
+                sb.append(TomlStringUtil.quote(actionIds.get(i)));
             }
             sb.append("]\n\n");
         }
@@ -87,12 +87,5 @@ public class RunItActionOrderConfig {
         }
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
-    }
-
-    private static String escape(String value) {
-        if (value == null) {
-            return "";
-        }
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 }
