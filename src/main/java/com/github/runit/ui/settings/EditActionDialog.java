@@ -5,8 +5,10 @@ import com.github.runit.config.ActionScope;
 import com.github.runit.config.RunItConfigPaths;
 import com.github.runit.i18n.RunItBundle;
 import com.github.runit.ui.RunItIcons;
+import com.intellij.ide.actions.ShowFilePathAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
+import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBLabel;
@@ -19,6 +21,9 @@ import org.jetbrains.annotations.Nullable;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
+import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -80,6 +85,18 @@ public class EditActionDialog extends DialogWrapper {
         return panel;
     }
 
+    @Override
+    protected Action[] createLeftSideActions() {
+        return new Action[]{
+                new AbstractAction(RunItBundle.message("dialog.edit.open_config_dir")) {
+                    @Override
+                    public void actionPerformed(ActionEvent e) {
+                        openConfigFileLocation();
+                    }
+                }
+        };
+    }
+
     private JComponent createScopeSelector() {
         JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUIScale.scale(8), 0));
         panel.setOpaque(false);
@@ -118,6 +135,30 @@ public class EditActionDialog extends DialogWrapper {
         hint.setForeground(JBColor.GRAY);
         hint.setToolTipText("");
         return hint;
+    }
+
+    private void openConfigFileLocation() {
+        File configFile = RunItConfigPaths.getConfigFile(project, getSelectedScope());
+        try {
+            ensureConfigFileExists(configFile);
+            ShowFilePathAction.openFile(configFile);
+        } catch (IOException | SecurityException e) {
+            Messages.showErrorDialog(
+                    project,
+                    RunItBundle.message("dialog.edit.open_config_dir.error", configFile.getAbsolutePath(), e.getMessage()),
+                    RunItBundle.message("dialog.edit.open_config_dir.error.title")
+            );
+        }
+    }
+
+    private void ensureConfigFileExists(File configFile) throws IOException {
+        File parent = configFile.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("Failed to create directory: " + parent.getAbsolutePath());
+        }
+        if (!configFile.exists() && !configFile.createNewFile()) {
+            throw new IOException("Failed to create file: " + configFile.getAbsolutePath());
+        }
     }
 
     private void updateConfigHint() {
