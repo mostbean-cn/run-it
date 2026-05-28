@@ -78,7 +78,7 @@ public class RunItConfigService implements Disposable {
                 LOG.warn("Failed to load RunIt config from " + file.getAbsolutePath(), e);
                 PartialConfigLoadResult partialResult = loadConfigPartially(file);
                 if (!partialResult.config().actions.isEmpty()) {
-                    return new LoadConfigResult(partialResult.config(), true);
+                    return new LoadConfigResult(partialResult.config(), partialResult.skippedCount() > 0);
                 }
             }
         }
@@ -140,7 +140,7 @@ public class RunItConfigService implements Disposable {
                 config.actions.addAll(blockConfig.actions);
                 loadedCount += blockConfig.actions.size();
             } catch (Exception e) {
-                RunItConfig recoveredConfig = recoverLegacyLiteralCommandBlock(actionBlock);
+                RunItConfig recoveredConfig = recoverCommandBlock(actionBlock);
                 if (recoveredConfig != null && !recoveredConfig.actions.isEmpty()) {
                     config.actions.addAll(recoveredConfig.actions);
                     loadedCount += recoveredConfig.actions.size();
@@ -164,6 +164,85 @@ public class RunItConfigService implements Disposable {
     private void preserveRawTomlBlock(ActionConfig action, String actionBlock) {
         action.preserveRawTomlBlock = true;
         action.rawTomlBlock = actionBlock;
+    }
+
+    private RunItConfig recoverCommandBlock(String actionBlock) {
+        RunItConfig recoveredConfig = recoverBasicCommandBlock(actionBlock);
+        if (recoveredConfig != null) {
+            return recoveredConfig;
+        }
+        return recoverLegacyLiteralCommandBlock(actionBlock);
+    }
+
+    private RunItConfig recoverBasicCommandBlock(String actionBlock) {
+        StringBuilder recoveredBlock = new StringBuilder();
+        String recoveredCommand = null;
+        for (String line : actionBlock.split("\\R", -1)) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("command = \"") && trimmed.endsWith("\"")) {
+                int quoteStart = line.indexOf('"');
+                int quoteEnd = line.lastIndexOf('"');
+                if (quoteEnd <= quoteStart) {
+                    return null;
+                }
+                recoveredCommand = decodeTomlBasicString(line.substring(quoteStart + 1, quoteEnd));
+                recoveredBlock.append(line, 0, line.indexOf("command = "))
+                        .append("command = ''")
+                        .append('\n');
+            } else {
+                recoveredBlock.append(line).append('\n');
+            }
+        }
+        if (recoveredCommand == null) {
+            return null;
+        }
+        RunItConfig recoveredConfig = readConfigFragment(recoveredBlock.toString());
+        if (recoveredConfig.actions.isEmpty()) {
+            return null;
+        }
+        for (ActionConfig action : recoveredConfig.actions) {
+            action.command = recoveredCommand;
+        }
+        preserveRawTomlBlock(recoveredConfig, actionBlock);
+        return recoveredConfig;
+    }
+
+    private String decodeTomlBasicString(String value) {
+        StringBuilder decoded = new StringBuilder(value.length());
+        for (int i = 0; i < value.length(); i++) {
+            char c = value.charAt(i);
+            if (c != '\\' || i == value.length() - 1) {
+                decoded.append(c);
+                continue;
+            }
+
+            char next = value.charAt(++i);
+            switch (next) {
+                case 'b' -> decoded.append('\b');
+                case 't' -> decoded.append('\t');
+                case 'n' -> decoded.append('\n');
+                case 'f' -> decoded.append('\f');
+                case 'r' -> decoded.append('\r');
+                case '"' -> decoded.append('"');
+                case '\\' -> decoded.append('\\');
+                case 'u', 'U' -> {
+                    int width = next == 'u' ? 4 : 8;
+                    if (i + width >= value.length()) {
+                        decoded.append('\\').append(next);
+                        continue;
+                    }
+                    String hex = value.substring(i + 1, i + 1 + width);
+                    try {
+                        decoded.appendCodePoint(Integer.parseInt(hex, 16));
+                        i += width;
+                    } catch (NumberFormatException e) {
+                        decoded.append('\\').append(next);
+                    }
+                }
+                default -> decoded.append('\\').append(next);
+            }
+        }
+        return decoded.toString();
     }
 
     private RunItConfig recoverLegacyLiteralCommandBlock(String actionBlock) {
