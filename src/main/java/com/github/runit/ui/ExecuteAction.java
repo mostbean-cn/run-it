@@ -27,7 +27,15 @@ public class ExecuteAction extends AnAction {
     }
 
     @Override
+    public void update(@NotNull AnActionEvent e) {
+        e.getPresentation().setEnabled(!actionConfig.isDamaged());
+    }
+
+    @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
+        if (actionConfig.isDamaged()) {
+            return;
+        }
         Project project = e.getProject();
         if (project != null) {
             CommandExecutor.execute(project, actionConfig);

@@ -12,6 +12,9 @@ public class ActionConfig {
     public String scope = ActionScope.GLOBAL.name();
     public String projectKey = "";
     public List<String> disabledProjectKeys = new ArrayList<>();
+    public transient boolean damaged = false;
+    public transient String damagedReason = "";
+    public transient String rawTomlBlock = "";
 
     public ActionConfig() {
     }
@@ -25,6 +28,10 @@ public class ActionConfig {
         this.name = name;
         this.icon = icon;
         this.command = command;
+    }
+
+    public boolean isDamaged() {
+        return damaged;
     }
 
     @Override

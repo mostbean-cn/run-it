@@ -372,6 +372,10 @@ public class ManageActionsDialog extends DialogWrapper {
             nameRow.add(nameLabel);
             nameRow.add(Box.createHorizontalStrut(8));
             nameRow.add(createScopeTag(scope, actionConfig));
+            if (actionConfig.isDamaged()) {
+                nameRow.add(Box.createHorizontalStrut(8));
+                nameRow.add(createDamagedTag(actionConfig));
+            }
             if (!scopedAction.isEnabledForCurrentProject()) {
                 nameRow.add(Box.createHorizontalStrut(8));
                 nameRow.add(createDisabledTag());
@@ -431,6 +435,18 @@ public class ManageActionsDialog extends DialogWrapper {
                 : new JBColor(new Color(0x5A3A12), Color.WHITE));
         if (scope == ActionScope.PROJECT && actionConfig.projectKey != null && !actionConfig.projectKey.isBlank()) {
             label.setToolTipText(actionConfig.projectKey);
+        }
+        label.setBorder(JBUI.Borders.empty(3, 8));
+        return label;
+    }
+
+    private JComponent createDamagedTag(ActionConfig actionConfig) {
+        JLabel label = new JLabel(RunItBundle.message("dialog.manage.tag.damaged"));
+        label.setOpaque(true);
+        label.setBackground(new JBColor(new Color(0xF5D7D7), new Color(0x633131)));
+        label.setForeground(new JBColor(new Color(0x842323), Color.WHITE));
+        if (actionConfig.damagedReason != null && !actionConfig.damagedReason.isBlank()) {
+            label.setToolTipText(actionConfig.damagedReason);
         }
         label.setBorder(JBUI.Borders.empty(3, 8));
         return label;

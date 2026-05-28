@@ -14,6 +14,14 @@ public class RunItConfig {
         StringBuilder sb = new StringBuilder();
         sb.append("version = ").append(version).append("\n\n");
         for (ActionConfig action : actions) {
+            if (action != null && action.isDamaged() && action.rawTomlBlock != null && !action.rawTomlBlock.isBlank()) {
+                sb.append(action.rawTomlBlock);
+                if (!action.rawTomlBlock.endsWith("\n")) {
+                    sb.append("\n");
+                }
+                sb.append("\n");
+                continue;
+            }
             sb.append("[[actions]]\n");
             sb.append("id = ").append(TomlStringUtil.quote(action.id)).append("\n");
             sb.append("name = ").append(TomlStringUtil.quote(action.name)).append("\n");

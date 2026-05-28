@@ -78,10 +78,8 @@ public class RunItConfigService implements Disposable {
                 LOG.warn("Failed to load RunIt config from " + file.getAbsolutePath(), e);
                 PartialConfigLoadResult partialResult = loadConfigPartially(file);
                 if (!partialResult.config().actions.isEmpty()) {
-                    showConfigPartialLoadNotification(file, scope, e, partialResult.loadedCount(), partialResult.skippedCount());
                     return new LoadConfigResult(partialResult.config(), true);
                 }
-                showConfigLoadErrorNotification(file, scope, e);
             }
         }
         return new LoadConfigResult(new RunItConfig(), false);
@@ -110,22 +108,40 @@ public class RunItConfigService implements Disposable {
         }
 
         int loadedCount = 0;
-        int skippedCount = 0;
+        int damagedCount = 0;
+        int blockIndex = 1;
         for (String actionBlock : actionBlocks) {
             try {
                 RunItConfig blockConfig = readConfigFragment(actionBlock);
                 if (blockConfig.actions.isEmpty()) {
-                    skippedCount++;
+                    config.actions.add(createDamagedAction(actionBlock, RunItBundle.message("dialog.manage.damaged.empty_block"), blockIndex));
+                    damagedCount++;
+                    blockIndex++;
                     continue;
                 }
                 config.actions.addAll(blockConfig.actions);
                 loadedCount += blockConfig.actions.size();
             } catch (Exception e) {
-                skippedCount++;
+                config.actions.add(createDamagedAction(actionBlock, e.getMessage(), blockIndex));
+                damagedCount++;
                 LOG.warn("Skipped invalid RunIt action block from " + file.getAbsolutePath(), e);
             }
+            blockIndex++;
         }
-        return new PartialConfigLoadResult(config, loadedCount, skippedCount);
+        return new PartialConfigLoadResult(config, loadedCount, damagedCount);
+    }
+
+    private ActionConfig createDamagedAction(String actionBlock, String reason, int blockIndex) {
+        ActionConfig action = new ActionConfig(
+                RunItBundle.message("dialog.manage.damaged.name", blockIndex),
+                "debug",
+                reason != null ? reason : RunItBundle.message("dialog.manage.damaged.unknown_reason")
+        );
+        action.id = "damaged-" + UUID.nameUUIDFromBytes(actionBlock.getBytes(StandardCharsets.UTF_8));
+        action.damaged = true;
+        action.damagedReason = action.command;
+        action.rawTomlBlock = actionBlock;
+        return action;
     }
 
     private RunItConfig readConfigFragment(String actionBlock) {
@@ -158,43 +174,6 @@ public class RunItConfigService implements Disposable {
             blocks.add(currentBlock.toString());
         }
         return blocks;
-    }
-
-    private void showConfigLoadErrorNotification(File file, ActionScope scope, Exception e) {
-        String scopeName = scope == ActionScope.GLOBAL
-                ? RunItBundle.message("scope.global")
-                : RunItBundle.message("scope.project");
-        String title = RunItBundle.message("notification.config.load_failed.title");
-        String content = RunItBundle.message("notification.config.load_failed.content", scopeName, e.getMessage(), file.getAbsolutePath());
-
-        ApplicationManager.getApplication().invokeLater(() -> {
-            com.intellij.notification.NotificationGroupManager.getInstance()
-                    .getNotificationGroup("RunIt")
-                    .createNotification(title, content, com.intellij.notification.NotificationType.ERROR)
-                    .notify(project);
-        });
-    }
-
-    private void showConfigPartialLoadNotification(File file, ActionScope scope, Exception e, int loadedCount, int skippedCount) {
-        String scopeName = scope == ActionScope.GLOBAL
-                ? RunItBundle.message("scope.global")
-                : RunItBundle.message("scope.project");
-        String title = RunItBundle.message("notification.config.partial_load.title");
-        String content = RunItBundle.message(
-                "notification.config.partial_load.content",
-                scopeName,
-                loadedCount,
-                skippedCount,
-                e.getMessage(),
-                file.getAbsolutePath()
-        );
-
-        ApplicationManager.getApplication().invokeLater(() -> {
-            com.intellij.notification.NotificationGroupManager.getInstance()
-                    .getNotificationGroup("RunIt")
-                    .createNotification(title, content, com.intellij.notification.NotificationType.WARNING)
-                    .notify(project);
-        });
     }
 
     private void reloadConfig(ActionScope scope) {
@@ -243,7 +222,7 @@ public class RunItConfigService implements Disposable {
                     backupPartiallyLoadedConfig(scope, file);
                     java.nio.file.Files.write(file.toPath(), config.toToml().getBytes(StandardCharsets.UTF_8));
                     if (scope == ActionScope.GLOBAL) {
-                        globalConfigLoadedPartially = false;
+                        globalConfigLoadedPartially = hasDamagedActions(config);
                     }
                     VirtualFile virtualFile = LocalFileSystem.getInstance().refreshAndFindFileByIoFile(file);
                     if (virtualFile != null) {
@@ -261,6 +240,15 @@ public class RunItConfigService implements Disposable {
             return;
         }
         java.nio.file.Files.copy(file.toPath(), new File(file.getAbsolutePath() + ".bak").toPath(), StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    private boolean hasDamagedActions(RunItConfig config) {
+        for (ActionConfig action : config.actions) {
+            if (action != null && action.isDamaged()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     public List<ScopedAction> getScopedActions() {
