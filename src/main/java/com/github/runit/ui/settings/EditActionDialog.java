@@ -5,7 +5,7 @@ import com.github.runit.config.ActionScope;
 import com.github.runit.config.RunItConfigPaths;
 import com.github.runit.i18n.RunItBundle;
 import com.github.runit.ui.RunItIcons;
-import com.intellij.ide.actions.ShowFilePathAction;
+import com.intellij.ide.actions.RevealFileAction;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
@@ -141,7 +141,7 @@ public class EditActionDialog extends DialogWrapper {
         File configFile = RunItConfigPaths.getConfigFile(project, getSelectedScope());
         try {
             ensureConfigFileExists(configFile);
-            ShowFilePathAction.openFile(configFile);
+            RevealFileAction.openFile(configFile);
         } catch (IOException | SecurityException e) {
             Messages.showErrorDialog(
                     project,
