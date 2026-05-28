@@ -4,7 +4,6 @@ import com.github.runit.config.ActionConfig;
 import com.github.runit.config.RunItConfigService;
 import com.github.runit.config.ScopedAction;
 import com.github.runit.i18n.RunItBundle;
-import com.github.runit.ui.settings.EditActionDialog;
 import com.intellij.openapi.actionSystem.*;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.ui.popup.JBPopupFactory;
@@ -49,7 +48,7 @@ public class RunItToolbarActionGroup extends AnAction {
             group.add(Separator.getInstance());
         }
 
-        group.add(new AnAction(RunItBundle.message("action.add.text"), RunItBundle.message("action.add.description"), com.intellij.icons.AllIcons.General.Add) {
+        group.add(new AnAction(RunItBundle.message("action.manage.text"), RunItBundle.message("action.manage.description"), com.intellij.icons.AllIcons.Actions.Properties) {
             @Override
             public @NotNull ActionUpdateThread getActionUpdateThread() {
                 return ActionUpdateThread.BGT;
@@ -57,30 +56,13 @@ public class RunItToolbarActionGroup extends AnAction {
 
             @Override
             public void actionPerformed(@NotNull AnActionEvent e) {
-                EditActionDialog dialog = new EditActionDialog(project, null, -1, null);
-                if (dialog.showAndGet()) {
-                    service.addAction(dialog.getSelectedScope(), dialog.getActionConfig());
-                }
+                ManageActionsDialog dialog = new ManageActionsDialog(project, service);
+                dialog.show();
             }
         });
 
-        if (hasActions) {
-            group.add(new AnAction(RunItBundle.message("action.manage.text"), RunItBundle.message("action.manage.description"), com.intellij.icons.AllIcons.Actions.Properties) {
-                @Override
-                public @NotNull ActionUpdateThread getActionUpdateThread() {
-                    return ActionUpdateThread.BGT;
-                }
-
-                @Override
-                public void actionPerformed(@NotNull AnActionEvent e) {
-                    ManageActionsDialog dialog = new ManageActionsDialog(project, service);
-                    dialog.show();
-                }
-            });
-        }
-
         ListPopup popup = JBPopupFactory.getInstance()
-                .createActionGroupPopup("RunIt", group, e.getDataContext(), JBPopupFactory.ActionSelectionAid.SPEEDSEARCH, true);
+                .createActionGroupPopup(null, group, e.getDataContext(), JBPopupFactory.ActionSelectionAid.SPEEDSEARCH, true);
         InputEvent inputEvent = e.getInputEvent();
         Component component = inputEvent != null ? inputEvent.getComponent() : null;
         if (component != null) {
