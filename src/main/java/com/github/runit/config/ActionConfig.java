@@ -9,6 +9,7 @@ public class ActionConfig {
     public String name = "";
     public String icon = "run";
     public String command = "";
+    public boolean background = false;
     public String scope = ActionScope.GLOBAL.name();
     public String projectKey = "";
     public List<String> disabledProjectKeys = new ArrayList<>();
@@ -40,7 +41,8 @@ public class ActionConfig {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         ActionConfig that = (ActionConfig) o;
-        return Objects.equals(id, that.id)
+        return background == that.background
+                && Objects.equals(id, that.id)
                 && Objects.equals(name, that.name)
                 && Objects.equals(icon, that.icon)
                 && Objects.equals(command, that.command)
@@ -51,6 +53,6 @@ public class ActionConfig {
 
     @Override
     public int hashCode() {
-        return Objects.hash(id, name, icon, command, scope, projectKey, disabledProjectKeys);
+        return Objects.hash(id, name, icon, command, background, scope, projectKey, disabledProjectKeys);
     }
 }

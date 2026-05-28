@@ -15,6 +15,8 @@ import com.intellij.execution.ui.ConsoleViewContentType;
 import com.intellij.execution.ui.RunContentDescriptor;
 import com.intellij.execution.ui.RunContentManager;
 import com.intellij.openapi.project.Project;
+import com.intellij.notification.Notification;
+import com.intellij.notification.NotificationType;
 import org.jetbrains.annotations.NotNull;
 
 public class CommandExecutor {
@@ -25,12 +27,67 @@ public class CommandExecutor {
             return;
         }
 
+        if (action.background) {
+            executeInBackground(project, action.name, command);
+            return;
+        }
+
         String title = RunItBundle.message("command.title", action.name);
         if (TerminalCommandRunner.execute(project, title, command)) {
             return;
         }
 
         executeInRunWindow(project, title, command);
+    }
+
+    private static void executeInBackground(Project project, String title, String command) {
+        try {
+            GeneralCommandLine cmdLine = buildBackgroundCommandLine(project, command);
+            OSProcessHandler processHandler = new OSProcessHandler(cmdLine);
+
+            processHandler.addProcessListener(new ProcessListener() {
+                @Override
+                public void processTerminated(@NotNull ProcessEvent event) {
+                    int exitCode = event.getExitCode();
+                    if (exitCode != 0) {
+                        showNotification(project,
+                                RunItBundle.message("command.title", title),
+                                "Background command failed with exit code " + exitCode,
+                                NotificationType.WARNING);
+                    }
+                }
+            });
+
+            processHandler.startNotify();
+        } catch (ExecutionException e) {
+            showNotification(project,
+                    RunItBundle.message("command.title", title),
+                    "Failed to start background command: " + e.getMessage(),
+                    NotificationType.ERROR);
+        }
+    }
+
+    private static GeneralCommandLine buildBackgroundCommandLine(Project project, String command) {
+        GeneralCommandLine cmdLine = new GeneralCommandLine();
+        cmdLine.setWorkDirectory(project.getBasePath());
+
+        String os = System.getProperty("os.name").toLowerCase();
+        if (os.contains("win")) {
+            cmdLine.setExePath("powershell.exe");
+            cmdLine.addParameter("-NoProfile");
+            cmdLine.addParameter("-NonInteractive");
+            cmdLine.addParameter("-Command");
+            cmdLine.addParameter(command);
+        } else {
+            cmdLine.setExePath("/bin/sh");
+            cmdLine.addParameter("-c");
+            cmdLine.addParameter(command);
+        }
+        return cmdLine;
+    }
+
+    private static void showNotification(Project project, String title, String content, NotificationType type) {
+        new Notification("RunIt", title, content, type).notify(project);
     }
 
     private static void executeInRunWindow(Project project, String title, String command) {

@@ -30,6 +30,9 @@ public class RunItConfig {
             sb.append("name = ").append(TomlStringUtil.quote(action.name)).append("\n");
             sb.append("icon = ").append(TomlStringUtil.quote(action.icon)).append("\n");
             sb.append("scope = ").append(TomlStringUtil.quote(action.scope)).append("\n");
+            if (action.background) {
+                sb.append("background = true\n");
+            }
             if (action.projectKey != null && !action.projectKey.isBlank()) {
                 sb.append("projectKey = ").append(TomlStringUtil.quote(action.projectKey)).append("\n");
             }

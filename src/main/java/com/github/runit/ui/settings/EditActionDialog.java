@@ -11,6 +11,7 @@ import com.intellij.openapi.ui.DialogWrapper;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.ui.ValidationInfo;
 import com.intellij.ui.JBColor;
+import com.intellij.ui.components.JBCheckBox;
 import com.intellij.ui.components.JBLabel;
 import com.intellij.ui.components.JBTextArea;
 import com.intellij.ui.components.JBTextField;
@@ -38,6 +39,7 @@ public class EditActionDialog extends DialogWrapper {
     private final JComboBox<IconItem> iconCombo;
     private final JCheckBox disabledForCurrentProjectCheckBox;
     private final JBTextArea commandArea;
+    private final JBCheckBox backgroundCheckBox;
     private final JBLabel configHint;
     private final String currentProjectKey;
     private final List<String> disabledProjectKeys;
@@ -64,6 +66,8 @@ public class EditActionDialog extends DialogWrapper {
         commandArea = new JBTextArea(config != null ? config.command : "", 6, 40);
         commandArea.setLineWrap(true);
         commandArea.setWrapStyleWord(true);
+        backgroundCheckBox = new JBCheckBox(RunItBundle.message("dialog.edit.label.background"));
+        backgroundCheckBox.setSelected(config != null && config.background);
         configHint = createConfigHint();
         scopeCombo.addActionListener(e -> updateScopeState());
         iconCategoryCombo.addActionListener(e -> updateIconOptions());
@@ -78,6 +82,7 @@ public class EditActionDialog extends DialogWrapper {
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.name"), nameField)
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.scope"), createScopeSelector())
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.icon"), createIconSelector())
+                .addComponent(backgroundCheckBox)
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.command"), JBUI.Panels.simplePanel(new JScrollPane(commandArea)))
                 .addComponent(configHint)
                 .getPanel();
@@ -265,6 +270,7 @@ public class EditActionDialog extends DialogWrapper {
                 selected != null ? selected.key : "run",
                 commandArea.getText()
         );
+        action.background = backgroundCheckBox.isSelected();
         ActionScope selectedScope = getSelectedScope();
         action.scope = selectedScope.name();
         if (selectedScope == ActionScope.GLOBAL) {
