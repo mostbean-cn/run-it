@@ -39,7 +39,7 @@ public class EditActionDialog extends DialogWrapper {
     private final JComboBox<IconItem> iconCombo;
     private final JCheckBox disabledForCurrentProjectCheckBox;
     private final JBTextArea commandArea;
-    private final JBCheckBox backgroundCheckBox;
+    private final JComboBox<TerminalOption> openTerminalCombo;
     private final JBLabel configHint;
     private final String currentProjectKey;
     private final List<String> disabledProjectKeys;
@@ -66,8 +66,11 @@ public class EditActionDialog extends DialogWrapper {
         commandArea = new JBTextArea(config != null ? config.command : "", 6, 40);
         commandArea.setLineWrap(true);
         commandArea.setWrapStyleWord(true);
-        backgroundCheckBox = new JBCheckBox(RunItBundle.message("dialog.edit.label.background"));
-        backgroundCheckBox.setSelected(config != null && config.background);
+        openTerminalCombo = new JComboBox<>(new TerminalOption[]{
+                new TerminalOption(false, RunItBundle.message("dialog.edit.open_terminal.open")),
+                new TerminalOption(true, RunItBundle.message("dialog.edit.open_terminal.close"))
+        });
+        openTerminalCombo.setSelectedIndex(config != null && config.background ? 1 : 0);
         configHint = createConfigHint();
         scopeCombo.addActionListener(e -> updateScopeState());
         iconCategoryCombo.addActionListener(e -> updateIconOptions());
@@ -82,7 +85,7 @@ public class EditActionDialog extends DialogWrapper {
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.name"), nameField)
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.scope"), createScopeSelector())
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.icon"), createIconSelector())
-                .addComponent(backgroundCheckBox)
+                .addLabeledComponent(RunItBundle.message("dialog.edit.label.open_terminal"), createOpenTerminalSelector())
                 .addLabeledComponent(RunItBundle.message("dialog.edit.label.command"), JBUI.Panels.simplePanel(new JScrollPane(commandArea)))
                 .addComponent(configHint)
                 .getPanel();
@@ -108,6 +111,14 @@ public class EditActionDialog extends DialogWrapper {
         setFixedComboWidth(scopeCombo, COMPACT_COMBO_WIDTH);
         panel.add(scopeCombo);
         panel.add(disabledForCurrentProjectCheckBox);
+        return panel;
+    }
+
+    private JComponent createOpenTerminalSelector() {
+        JPanel panel = new JPanel(new FlowLayout(FlowLayout.LEFT, JBUIScale.scale(8), 0));
+        panel.setOpaque(false);
+        setFixedComboWidth(openTerminalCombo, COMPACT_COMBO_WIDTH);
+        panel.add(openTerminalCombo);
         return panel;
     }
 
@@ -270,7 +281,8 @@ public class EditActionDialog extends DialogWrapper {
                 selected != null ? selected.key : "run",
                 commandArea.getText()
         );
-        action.background = backgroundCheckBox.isSelected();
+        TerminalOption terminalSelected = (TerminalOption) openTerminalCombo.getSelectedItem();
+        action.background = terminalSelected != null && terminalSelected.background;
         ActionScope selectedScope = getSelectedScope();
         action.scope = selectedScope.name();
         if (selectedScope == ActionScope.GLOBAL) {
@@ -331,6 +343,21 @@ public class EditActionDialog extends DialogWrapper {
                 setIcon(item.icon);
             }
             return this;
+        }
+    }
+
+    private static class TerminalOption {
+        final boolean background;
+        final String displayName;
+
+        TerminalOption(boolean background, String displayName) {
+            this.background = background;
+            this.displayName = displayName;
+        }
+
+        @Override
+        public String toString() {
+            return displayName;
         }
     }
 }
