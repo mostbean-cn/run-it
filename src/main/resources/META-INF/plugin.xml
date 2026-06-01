@@ -1,7 +1,7 @@
 <idea-plugin>
     <id>com.github.runit</id>
     <name>RunIt</name>
-    <version>0.1.4</version>
+    <version>0.1.5</version>
     <vendor>mostbean</vendor>
 
     <description><![CDATA[
@@ -13,6 +13,11 @@
     ]]></description>
 
     <change-notes><![CDATA[
+        <p><strong>0.1.5</strong></p>
+        <ul>
+            <li>新增 Cursor、Claude Code、OpenCode Agent 图标，并补充深色主题图标适配。</li>
+        </ul>
+
         <p><strong>0.1.4</strong></p>
         <ul>
             <li>优化工具栏下拉菜单，隐藏标题栏，移除“添加操作”入口，并保持“管理操作”常驻显示。</li>
