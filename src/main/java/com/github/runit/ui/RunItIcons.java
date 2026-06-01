@@ -64,6 +64,7 @@ public final class RunItIcons {
         definitions.add(new IconDefinition("gemini", loadBundledIcon("gemini"), IconCategory.AI));
         definitions.add(new IconDefinition("openAI", loadBundledIcon("openAI"), IconCategory.AI));
         definitions.add(new IconDefinition("openRouter", loadBundledIcon("openRouter"), IconCategory.AI));
+        definitions.add(new IconDefinition("cursor", loadBundledIcon("cursor"), IconCategory.AI));
         definitions.add(new IconDefinition("mistral", loadBundledIcon("mistral"), IconCategory.AI));
         definitions.add(new IconDefinition("ollama", loadBundledIcon("ollama"), IconCategory.AI));
         return Collections.unmodifiableList(definitions);
