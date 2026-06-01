@@ -60,10 +60,12 @@ public final class RunItIcons {
         definitions.add(new IconDefinition("debug", com.intellij.icons.AllIcons.Actions.StartDebugger, IconCategory.DEV));
 
         definitions.add(new IconDefinition("anthropic", loadBundledIcon("anthropic"), IconCategory.AI));
+        definitions.add(new IconDefinition("claudeCode", loadBundledIcon("claudeCode"), IconCategory.AI));
         definitions.add(new IconDefinition("deepSeek", loadBundledIcon("deepSeek"), IconCategory.AI));
         definitions.add(new IconDefinition("gemini", loadBundledIcon("gemini"), IconCategory.AI));
         definitions.add(new IconDefinition("openAI", loadBundledIcon("openAI"), IconCategory.AI));
         definitions.add(new IconDefinition("openRouter", loadBundledIcon("openRouter"), IconCategory.AI));
+        definitions.add(new IconDefinition("openCode", loadBundledIcon("openCode"), IconCategory.AI));
         definitions.add(new IconDefinition("cursor", loadBundledIcon("cursor"), IconCategory.AI));
         definitions.add(new IconDefinition("mistral", loadBundledIcon("mistral"), IconCategory.AI));
         definitions.add(new IconDefinition("ollama", loadBundledIcon("ollama"), IconCategory.AI));
